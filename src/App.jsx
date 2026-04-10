@@ -38,7 +38,7 @@ const initialForm = {
   title: "",
   slogan: "",
   description: "",
-  category: "",
+  category: [],
   project_url: "",
   image_url: "",
   logo_url: "",
@@ -47,6 +47,28 @@ const initialForm = {
 
 const storageBucket = "project-assets";
 const totalModalSteps = 3;
+const categoryOptions = [
+  "Automation",
+  "AI Agents",
+  "Content",
+  "Marketing",
+  "Sales",
+  "Customer Support",
+  "Productivity",
+  "Analytics",
+  "Research",
+  "Coding",
+  "Design",
+  "Education",
+  "Video",
+  "Audio",
+  "Image Generation",
+  "Data",
+  "Finance",
+  "Healthcare",
+  "Recruiting",
+  "Other"
+];
 
 function slugify(value) {
   return value
@@ -54,6 +76,25 @@ function slugify(value) {
     .trim()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
+}
+
+function getCategoryList(categoryValue) {
+  if (Array.isArray(categoryValue)) {
+    return categoryValue.filter(Boolean);
+  }
+
+  if (!categoryValue) {
+    return [];
+  }
+
+  return String(categoryValue)
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function getCategorySlug(categoryValue) {
+  return slugify(categoryValue);
 }
 
 function App() {
@@ -70,11 +111,15 @@ function App() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [activeView, setActiveView] = useState("home");
   const [activeSlug, setActiveSlug] = useState("");
+  const [activeCategorySlug, setActiveCategorySlug] = useState("");
+  const [homeCategoryFilterSlug, setHomeCategoryFilterSlug] = useState("");
   const [modalStep, setModalStep] = useState(1);
+  const [isCategoryMenuOpen, setIsCategoryMenuOpen] = useState(false);
   const [logoFile, setLogoFile] = useState(null);
   const [screenshotFile, setScreenshotFile] = useState(null);
   const logoInputRef = useRef(null);
   const screenshotInputRef = useRef(null);
+  const categoryMenuRef = useRef(null);
 
   async function loadProjects() {
     if (!hasSupabaseCredentials || !supabase) {
@@ -185,17 +230,29 @@ function App() {
       if (path === "/dashboard") {
         setActiveView("dashboard");
         setActiveSlug("");
+        setHomeCategoryFilterSlug("");
         return;
       }
 
       if (path.startsWith("/project/")) {
         setActiveView("project");
         setActiveSlug(decodeURIComponent(path.replace("/project/", "")));
+        setActiveCategorySlug("");
+        setHomeCategoryFilterSlug("");
+        return;
+      }
+
+      if (path.startsWith("/category/")) {
+        setActiveView("category");
+        setActiveCategorySlug(decodeURIComponent(path.replace("/category/", "")));
+        setActiveSlug("");
+        setHomeCategoryFilterSlug("");
         return;
       }
 
       setActiveView("home");
       setActiveSlug("");
+      setActiveCategorySlug("");
     }
 
     syncViewFromLocation();
@@ -203,6 +260,28 @@ function App() {
 
     return () => {
       window.removeEventListener("popstate", syncViewFromLocation);
+    };
+  }, []);
+
+  useEffect(() => {
+    function handleDocumentClick(event) {
+      if (!categoryMenuRef.current?.contains(event.target)) {
+        setIsCategoryMenuOpen(false);
+      }
+    }
+
+    function handleEscape(event) {
+      if (event.key === "Escape") {
+        setIsCategoryMenuOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleDocumentClick);
+    document.addEventListener("keydown", handleEscape);
+
+    return () => {
+      document.removeEventListener("mousedown", handleDocumentClick);
+      document.removeEventListener("keydown", handleEscape);
     };
   }, []);
 
@@ -251,11 +330,26 @@ function App() {
     }));
   }
 
+  function toggleCategoryMenu() {
+    setIsCategoryMenuOpen((current) => !current);
+  }
+
+  function selectCategory(categoryOption) {
+    setSubmitStatus("idle");
+    setSubmitMessage("");
+    setFormData((current) => ({
+      ...current,
+      category: current.category.includes(categoryOption)
+        ? current.category.filter((item) => item !== categoryOption)
+        : [...current.category, categoryOption]
+    }));
+  }
+
   function validateModalStep(step) {
     if (step === 1) {
-      if (!formData.title.trim() || !formData.category.trim() || !formData.description.trim()) {
+      if (!formData.title.trim() || !formData.category.length || !formData.description.trim()) {
         setSubmitStatus("error");
-        setSubmitMessage("Fill in the project title, category, and description before continuing.");
+        setSubmitMessage("Fill in the project title, choose at least one category, and add a description.");
         return false;
       }
 
@@ -339,7 +433,7 @@ function App() {
       title: formData.title.trim(),
       slogan: formData.slogan.trim(),
       description: formData.description.trim(),
-      category: formData.category.trim(),
+      category: formData.category.join(", "),
       project_url: formData.project_url.trim(),
       image_url: screenshotUpload.publicUrl,
       logo_url: logoUpload.publicUrl,
@@ -372,6 +466,7 @@ function App() {
     setSubmitStatus("idle");
     setSubmitMessage("");
     setModalStep(1);
+    setIsCategoryMenuOpen(false);
     setIsMenuOpen(false);
     setIsModalOpen(true);
   }
@@ -380,6 +475,7 @@ function App() {
     setModalStep(1);
     setSubmitStatus("idle");
     setSubmitMessage("");
+    setIsCategoryMenuOpen(false);
     setIsModalOpen(false);
   }
 
@@ -391,12 +487,14 @@ function App() {
     setIsMenuOpen(false);
     window.history.pushState({}, "", "/dashboard");
     setActiveView("dashboard");
+    setHomeCategoryFilterSlug("");
   }
 
   function openHome() {
     window.history.pushState({}, "", "/");
     setActiveView("home");
     setActiveSlug("");
+    setActiveCategorySlug("");
     setIsMenuOpen(false);
   }
 
@@ -405,6 +503,28 @@ function App() {
     window.history.pushState({}, "", `/project/${projectSlug}`);
     setActiveView("project");
     setActiveSlug(projectSlug);
+    setActiveCategorySlug("");
+    setHomeCategoryFilterSlug("");
+    setIsMenuOpen(false);
+  }
+
+  function openCategoryPage(categoryName) {
+    const categorySlug = getCategorySlug(categoryName);
+    window.history.pushState({}, "", `/category/${categorySlug}`);
+    setActiveView("category");
+    setActiveCategorySlug(categorySlug);
+    setActiveSlug("");
+    setHomeCategoryFilterSlug("");
+    setIsMenuOpen(false);
+  }
+
+  function toggleHomeCategoryFilter(categoryName) {
+    const categorySlug = getCategorySlug(categoryName);
+    window.history.pushState({}, "", "/");
+    setActiveView("home");
+    setActiveSlug("");
+    setActiveCategorySlug("");
+    setHomeCategoryFilterSlug((current) => (current === categorySlug ? "" : categorySlug));
     setIsMenuOpen(false);
   }
 
@@ -477,6 +597,30 @@ function App() {
 
   const userAvatar = session?.user?.user_metadata?.avatar_url;
   const activeProject = projects.find((project) => slugify(project.title) === activeSlug);
+  const allCategoryNames = Array.from(
+    new Set(
+      projects.flatMap((project) => getCategoryList(project.category))
+    )
+  );
+  const activeCategoryName =
+    allCategoryNames.find((categoryName) => getCategorySlug(categoryName) === activeCategorySlug) || "";
+  const categoryProjects = projects.filter((project) =>
+    getCategoryList(project.category).some(
+      (categoryName) => getCategorySlug(categoryName) === activeCategorySlug
+    )
+  );
+  const filteredHomeProjects = homeCategoryFilterSlug
+    ? projects.filter((project) =>
+        getCategoryList(project.category).some(
+          (categoryName) => getCategorySlug(categoryName) === homeCategoryFilterSlug
+        )
+      )
+    : projects;
+  const categoryCounts = allCategoryNames.map((categoryName) => ({
+    name: categoryName,
+    slug: getCategorySlug(categoryName),
+    count: projects.filter((project) => getCategoryList(project.category).includes(categoryName)).length
+  }));
 
   return (
     <div className="page-shell">
@@ -588,7 +732,21 @@ function App() {
                           backgroundImage: `linear-gradient(180deg, rgba(14, 19, 24, 0.05), rgba(14, 19, 24, 0.78)), url(${project.image_url})`
                         }}
                       >
-                        <span>{project.category || "Project"}</span>
+                        <div className="project-category-list">
+                          {(getCategoryList(project.category).length
+                            ? getCategoryList(project.category)
+                            : ["Project"]
+                          ).map((categoryItem) => (
+                            <button
+                              className="project-category-tag"
+                              key={`${project.id}-${categoryItem}`}
+                              onClick={() => openCategoryPage(categoryItem)}
+                              type="button"
+                            >
+                              {categoryItem}
+                            </button>
+                          ))}
+                        </div>
                       </div>
                       <div className="card-content">
                         <div className="card-title-row">
@@ -602,7 +760,6 @@ function App() {
                             ) : null}
                           </div>
                         </div>
-                        <p>{project.description || "No description provided yet."}</p>
                         <div className="card-actions">
                           <button className="link-button" onClick={() => openProject(project)} type="button">
                             View details
@@ -660,7 +817,9 @@ function App() {
                           />
                         ) : null}
                         <div>
-                          <span className="panel-label">{activeProject.category || "Project"}</span>
+                          <span className="panel-label">
+                            {getCategoryList(activeProject.category).join(" • ") || "Project"}
+                          </span>
                           <h3>{activeProject.title}</h3>
                           {activeProject.slogan ? (
                             <p className="project-slogan project-slogan-large">{activeProject.slogan}</p>
@@ -697,6 +856,103 @@ function App() {
               </div>
             )}
           </section>
+        ) : activeView === "category" ? (
+          <section className="category-page">
+            <div className="section-heading">
+              <div>
+                <p className="eyebrow">Category page</p>
+                <h2>{activeCategoryName || "Category"}</h2>
+              </div>
+              <button className="secondary-button" onClick={openHome} type="button">
+                Back to projects
+              </button>
+            </div>
+
+            <div className="content-with-sidebar">
+              <div className="content-main">
+                <div className="category-summary">
+                  <span className="panel-label">Projects found</span>
+                  <strong>{categoryProjects.length}</strong>
+                  <p>
+                    {activeCategoryName
+                      ? `Browse all projects tagged with ${activeCategoryName}.`
+                      : "Browse all projects in this category."}
+                  </p>
+                </div>
+
+                <div className="projects-grid">
+                  {categoryProjects.map((project) => (
+                    <article className="project-card" key={project.id}>
+                      <div
+                        className="project-visual"
+                        style={{
+                          backgroundImage: `linear-gradient(180deg, rgba(14, 19, 24, 0.05), rgba(14, 19, 24, 0.78)), url(${project.image_url})`
+                        }}
+                      >
+                        <div className="project-category-list">
+                          {(getCategoryList(project.category).length
+                            ? getCategoryList(project.category)
+                            : ["Project"]
+                          ).map((categoryItem) => (
+                            <button
+                              className="project-category-tag"
+                              key={`${project.id}-${categoryItem}`}
+                              onClick={() => openCategoryPage(categoryItem)}
+                              type="button"
+                            >
+                              {categoryItem}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="card-content">
+                        <div className="card-title-row">
+                          {project.logo_url ? (
+                            <img className="project-logo" src={project.logo_url} alt={project.title} />
+                          ) : null}
+                          <div>
+                            <h3>{project.title}</h3>
+                            {project.slogan ? <p className="project-slogan">{project.slogan}</p> : null}
+                          </div>
+                        </div>
+                        <div className="card-actions">
+                          <button className="link-button" onClick={() => openProject(project)} type="button">
+                            View details
+                          </button>
+                          <a href={project.project_url || "#"} target="_blank" rel="noreferrer">
+                            Visit →
+                          </a>
+                        </div>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </div>
+
+              <aside className="category-sidebar">
+                <p className="eyebrow">Categories</p>
+                <div className="category-sidebar-list">
+                  {categoryCounts.map((categoryItem) => (
+                    <div
+                      className={`category-sidebar-item ${
+                        categoryItem.slug === activeCategorySlug ? "category-sidebar-item-active" : ""
+                      }`}
+                      key={categoryItem.slug}
+                    >
+                      <span>{categoryItem.name}</span>
+                      <strong>{categoryItem.count}</strong>
+                    </div>
+                  ))}
+                </div>
+              </aside>
+            </div>
+
+            {!categoryProjects.length ? (
+              <div className="empty-state">
+                No projects were found for this category yet.
+              </div>
+            ) : null}
+          </section>
         ) : (
           <>
             <section className="hero">
@@ -731,42 +987,86 @@ function App() {
                 <span className={`status-pill status-${status}`}>{status}</span>
               </div>
 
-              <div className="projects-grid">
-                {projects.map((project) => (
-                  <article className="project-card" key={project.id}>
-                    <div
-                      className="project-visual"
-                      style={{
-                        backgroundImage: `linear-gradient(180deg, rgba(14, 19, 24, 0.05), rgba(14, 19, 24, 0.78)), url(${project.image_url})`
-                      }}
-                    >
-                      <span>{project.category || "Project"}</span>
-                    </div>
-                    <div className="card-content">
-                      <div className="card-title-row">
-                        {project.logo_url ? (
-                          <img className="project-logo" src={project.logo_url} alt={project.title} />
-                        ) : null}
-                        <div>
-                          <h3>{project.title}</h3>
-                          {project.slogan ? (
-                            <p className="project-slogan">{project.slogan}</p>
-                          ) : null}
+              <div className="content-with-sidebar">
+                <div className="content-main">
+                  <div className="projects-grid">
+                    {filteredHomeProjects.map((project) => (
+                      <article className="project-card" key={project.id}>
+                        <div
+                          className="project-visual"
+                          style={{
+                            backgroundImage: `linear-gradient(180deg, rgba(14, 19, 24, 0.05), rgba(14, 19, 24, 0.78)), url(${project.image_url})`
+                          }}
+                        >
+                          <div className="project-category-list">
+                            {(getCategoryList(project.category).length
+                              ? getCategoryList(project.category)
+                              : ["Project"]
+                            ).map((categoryItem) => (
+                              <button
+                                className="project-category-tag"
+                                key={`${project.id}-${categoryItem}`}
+                                onClick={() => openCategoryPage(categoryItem)}
+                                type="button"
+                              >
+                                {categoryItem}
+                              </button>
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                      <p>{project.description || "No description provided yet."}</p>
-                      <div className="card-actions">
-                        <button className="link-button" onClick={() => openProject(project)} type="button">
-                          View details
-                        </button>
-                        <a href={project.project_url || "#"} target="_blank" rel="noreferrer">
-                          Visit →
-                        </a>
-                      </div>
-                    </div>
-                  </article>
-                ))}
+                        <div className="card-content">
+                          <div className="card-title-row">
+                            {project.logo_url ? (
+                              <img className="project-logo" src={project.logo_url} alt={project.title} />
+                            ) : null}
+                            <div>
+                              <h3>{project.title}</h3>
+                              {project.slogan ? (
+                                <p className="project-slogan">{project.slogan}</p>
+                              ) : null}
+                            </div>
+                          </div>
+                          <div className="card-actions">
+                            <button className="link-button" onClick={() => openProject(project)} type="button">
+                              View details
+                            </button>
+                            <a href={project.project_url || "#"} target="_blank" rel="noreferrer">
+                              Visit →
+                            </a>
+                          </div>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                </div>
+
+                <aside className="category-sidebar">
+                  <p className="eyebrow">Categories</p>
+                  <div className="category-sidebar-list">
+                    {categoryCounts.map((categoryItem) => (
+                      <button
+                        className={`category-sidebar-item ${
+                          categoryItem.slug === homeCategoryFilterSlug
+                            ? "category-sidebar-item-active"
+                            : ""
+                        }`}
+                        key={categoryItem.slug}
+                        onClick={() => toggleHomeCategoryFilter(categoryItem.name)}
+                        type="button"
+                      >
+                        <span>{categoryItem.name}</span>
+                        <strong>{categoryItem.count}</strong>
+                      </button>
+                    ))}
+                  </div>
+                </aside>
               </div>
+
+              {!filteredHomeProjects.length && status === "ready" ? (
+                <div className="empty-state">
+                  No projects match this category filter.
+                </div>
+              ) : null}
 
               {!projects.length && status === "ready" ? (
                 <div className="empty-state">
@@ -854,13 +1154,44 @@ function App() {
 
                   <label className="field">
                     <span>Category</span>
-                    <input
-                      name="category"
-                      value={formData.category}
-                      onChange={handleInputChange}
-                      placeholder="Automation"
-                      type="text"
-                    />
+                    <div className="custom-select" ref={categoryMenuRef}>
+                      <button
+                        aria-expanded={isCategoryMenuOpen}
+                        aria-haspopup="listbox"
+                        className={`custom-select-trigger ${
+                          isCategoryMenuOpen ? "custom-select-trigger-open" : ""
+                        }`}
+                        onClick={toggleCategoryMenu}
+                        type="button"
+                      >
+                        <span className={formData.category.length ? "custom-select-values" : "custom-select-placeholder"}>
+                          {formData.category.length ? formData.category.join(", ") : "Choose categories"}
+                        </span>
+                        <span className="custom-select-chevron" aria-hidden="true" />
+                      </button>
+
+                      {isCategoryMenuOpen ? (
+                        <div className="custom-select-menu" role="listbox" aria-label="Category options">
+                          {categoryOptions.map((categoryOption) => (
+                            <button
+                              key={categoryOption}
+                              className={`custom-select-option ${
+                                formData.category.includes(categoryOption) ? "custom-select-option-active" : ""
+                              }`}
+                              onClick={() => selectCategory(categoryOption)}
+                              aria-selected={formData.category.includes(categoryOption)}
+                              role="option"
+                              type="button"
+                            >
+                              <span className="custom-select-option-mark">
+                                {formData.category.includes(categoryOption) ? "✓" : ""}
+                              </span>
+                              {categoryOption}
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
                   </label>
 
                   <label className="field field-wide">
