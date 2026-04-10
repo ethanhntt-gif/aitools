@@ -5,6 +5,7 @@ const demoProjects = [
   {
     id: "demo-1",
     title: "AI Outreach Assistant",
+    slogan: "Prospecting and follow-ups on autopilot.",
     description: "Automates prospect research, drafts outreach, and tracks conversations.",
     category: "Automation",
     project_url: "#",
@@ -14,6 +15,7 @@ const demoProjects = [
   {
     id: "demo-2",
     title: "Content Studio",
+    slogan: "From brief to launch-ready content in minutes.",
     description: "Turns briefs into social posts, blog outlines, and campaign assets in minutes.",
     category: "Content",
     project_url: "#",
@@ -23,6 +25,7 @@ const demoProjects = [
   {
     id: "demo-3",
     title: "Support Copilot",
+    slogan: "Faster replies, calmer queues, better support.",
     description: "Suggests support replies, summarizes tickets, and surfaces urgent issues.",
     category: "Customer Care",
     project_url: "#",
@@ -33,14 +36,17 @@ const demoProjects = [
 
 const initialForm = {
   title: "",
+  slogan: "",
   description: "",
   category: "",
   project_url: "",
   image_url: "",
-  logo_url: ""
+  logo_url: "",
+  launch_week: ""
 };
 
 const storageBucket = "project-assets";
+const totalModalSteps = 3;
 
 function slugify(value) {
   return value
@@ -64,6 +70,7 @@ function App() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [activeView, setActiveView] = useState("home");
   const [activeSlug, setActiveSlug] = useState("");
+  const [modalStep, setModalStep] = useState(1);
   const [logoFile, setLogoFile] = useState(null);
   const [screenshotFile, setScreenshotFile] = useState(null);
   const logoInputRef = useRef(null);
@@ -82,7 +89,7 @@ function App() {
 
     const { data, error } = await supabase
       .from("projects")
-      .select("id, title, description, category, project_url, image_url, logo_url, owner_id")
+      .select("id, title, slogan, description, category, project_url, image_url, logo_url, owner_id")
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -111,7 +118,7 @@ function App() {
 
     const { data, error } = await supabase
       .from("projects")
-      .select("id, title, description, category, project_url, image_url, logo_url, owner_id")
+      .select("id, title, slogan, description, category, project_url, image_url, logo_url, owner_id")
       .eq("owner_id", activeSession.user.id)
       .order("created_at", { ascending: false });
 
@@ -244,12 +251,62 @@ function App() {
     }));
   }
 
+  function validateModalStep(step) {
+    if (step === 1) {
+      if (!formData.title.trim() || !formData.category.trim() || !formData.description.trim()) {
+        setSubmitStatus("error");
+        setSubmitMessage("Fill in the project title, category, and description before continuing.");
+        return false;
+      }
+
+      if (!formData.project_url.trim()) {
+        setSubmitStatus("error");
+        setSubmitMessage("Add the project URL before continuing.");
+        return false;
+      }
+    }
+
+    if (step === 2 && (!logoFile || !screenshotFile)) {
+      setSubmitStatus("error");
+      setSubmitMessage("Choose both a logo and a screenshot before continuing.");
+      return false;
+    }
+
+    if (step === 3 && !formData.launch_week) {
+      setSubmitStatus("error");
+      setSubmitMessage("Choose the launch week before submitting.");
+      return false;
+    }
+
+    setSubmitStatus("idle");
+    setSubmitMessage("");
+    return true;
+  }
+
+  function handleNextStep() {
+    if (!validateModalStep(modalStep)) {
+      return;
+    }
+
+    setModalStep((current) => Math.min(current + 1, totalModalSteps));
+  }
+
+  function handlePreviousStep() {
+    setSubmitStatus("idle");
+    setSubmitMessage("");
+    setModalStep((current) => Math.max(current - 1, 1));
+  }
+
   async function handleProjectSubmit(event) {
     event.preventDefault();
 
     if (!supabase || !session) {
       setSubmitStatus("error");
       setSubmitMessage("Please sign in before submitting a project.");
+      return;
+    }
+
+    if (!validateModalStep(3)) {
       return;
     }
 
@@ -280,6 +337,7 @@ function App() {
 
     const payload = {
       title: formData.title.trim(),
+      slogan: formData.slogan.trim(),
       description: formData.description.trim(),
       category: formData.category.trim(),
       project_url: formData.project_url.trim(),
@@ -313,11 +371,15 @@ function App() {
   function openModal() {
     setSubmitStatus("idle");
     setSubmitMessage("");
+    setModalStep(1);
     setIsMenuOpen(false);
     setIsModalOpen(true);
   }
 
   function closeModal() {
+    setModalStep(1);
+    setSubmitStatus("idle");
+    setSubmitMessage("");
     setIsModalOpen(false);
   }
 
@@ -533,7 +595,12 @@ function App() {
                           {project.logo_url ? (
                             <img className="project-logo" src={project.logo_url} alt={project.title} />
                           ) : null}
-                          <h3>{project.title}</h3>
+                          <div>
+                            <h3>{project.title}</h3>
+                            {project.slogan ? (
+                              <p className="project-slogan">{project.slogan}</p>
+                            ) : null}
+                          </div>
                         </div>
                         <p>{project.description || "No description provided yet."}</p>
                         <div className="card-actions">
@@ -541,7 +608,7 @@ function App() {
                             View details
                           </button>
                           <a href={project.project_url || "#"} target="_blank" rel="noreferrer">
-                            Open project
+                            Visit →
                           </a>
                         </div>
                       </div>
@@ -595,6 +662,9 @@ function App() {
                         <div>
                           <span className="panel-label">{activeProject.category || "Project"}</span>
                           <h3>{activeProject.title}</h3>
+                          {activeProject.slogan ? (
+                            <p className="project-slogan project-slogan-large">{activeProject.slogan}</p>
+                          ) : null}
                         </div>
                       </div>
                       <p>{activeProject.description || "No description provided yet."}</p>
@@ -677,7 +747,12 @@ function App() {
                         {project.logo_url ? (
                           <img className="project-logo" src={project.logo_url} alt={project.title} />
                         ) : null}
-                        <h3>{project.title}</h3>
+                        <div>
+                          <h3>{project.title}</h3>
+                          {project.slogan ? (
+                            <p className="project-slogan">{project.slogan}</p>
+                          ) : null}
+                        </div>
                       </div>
                       <p>{project.description || "No description provided yet."}</p>
                       <div className="card-actions">
@@ -685,7 +760,7 @@ function App() {
                           View details
                         </button>
                         <a href={project.project_url || "#"} target="_blank" rel="noreferrer">
-                          Open project
+                          Visit →
                         </a>
                       </div>
                     </div>
@@ -703,8 +778,8 @@ function App() {
             <section className="about-section" id="about">
               <p className="eyebrow">Suggested schema</p>
               <p>
-                Use a `projects` table with fields like `id`, `title`, `description`,
-                `category`, `project_url`, `image_url`, and `created_at`.
+                Use a `projects` table with fields like `id`, `title`, `slogan`,
+                `description`, `category`, `project_url`, `image_url`, and `created_at`.
               </p>
               <p>
                 For Google sign-in, enable the Google provider in Supabase Auth and
@@ -745,134 +820,194 @@ function App() {
             </div>
 
             <form className="project-form" onSubmit={handleProjectSubmit}>
-              <label className="field">
-                <span>Project title</span>
-                <input
-                  name="title"
-                  value={formData.title}
-                  onChange={handleInputChange}
-                  placeholder="AI SEO Bot"
-                  required
-                  type="text"
-                />
-              </label>
-
-              <label className="field">
-                <span>Category</span>
-                <input
-                  name="category"
-                  value={formData.category}
-                  onChange={handleInputChange}
-                  placeholder="Automation"
-                  required
-                  type="text"
-                />
-              </label>
-
-              <label className="field field-wide">
-                <span>Description</span>
-                <textarea
-                  name="description"
-                  value={formData.description}
-                  onChange={handleInputChange}
-                  placeholder="Describe what your project does and why it matters."
-                  required
-                  rows="5"
-                />
-              </label>
-
-              <label className="field">
-                <span>Project URL</span>
-                <input
-                  name="project_url"
-                  value={formData.project_url}
-                  onChange={handleInputChange}
-                  placeholder="https://your-project.com"
-                  required
-                  type="url"
-                />
-              </label>
-
-              <div className="field field-wide">
-                <span>Brand assets</span>
-                <input
-                  ref={logoInputRef}
-                  className="visually-hidden"
-                  accept="image/*"
-                  onChange={(event) => handleFileChange(event, "logo")}
-                  type="file"
-                />
-                <input
-                  ref={screenshotInputRef}
-                  className="visually-hidden"
-                  accept="image/*"
-                  onChange={(event) => handleFileChange(event, "screenshot")}
-                  type="file"
-                />
-                <div className="dropzone-grid">
-                  <button
-                    className="dropzone"
-                    onClick={() => handleDropZoneClick("logo_url")}
-                    type="button"
-                  >
-                    <strong>Logo</strong>
-                    <span>
-                      {logoFile ? logoFile.name : "Click to choose a logo from your computer"}
-                    </span>
-                  </button>
-
-                  <button
-                    className="dropzone"
-                    onClick={() => handleDropZoneClick("image_url")}
-                    type="button"
-                  >
-                    <strong>Screenshot</strong>
-                    <span>
-                      {screenshotFile
-                        ? screenshotFile.name
-                        : "Click to choose a screenshot from your computer"}
-                    </span>
-                  </button>
+              <div className="modal-steps">
+                <div className={`modal-step-pill ${modalStep >= 1 ? "modal-step-pill-active" : ""}`}>
+                  <span>1</span>
+                  <strong>Information</strong>
                 </div>
-                <div className="preview-grid">
-                  <div className="preview-card">
-                    <span className="preview-label">Logo preview</span>
-                    {logoFile ? (
-                      <img
-                        alt="Logo preview"
-                        className="preview-image preview-image-logo"
-                        src={URL.createObjectURL(logoFile)}
-                      />
-                    ) : (
-                      <div className="preview-placeholder">No logo selected</div>
-                    )}
-                  </div>
-                  <div className="preview-card">
-                    <span className="preview-label">Screenshot preview</span>
-                    {screenshotFile ? (
-                      <img
-                        alt="Screenshot preview"
-                        className="preview-image"
-                        src={URL.createObjectURL(screenshotFile)}
-                      />
-                    ) : (
-                      <div className="preview-placeholder">No screenshot selected</div>
-                    )}
-                  </div>
+                <div className={`modal-step-pill ${modalStep >= 2 ? "modal-step-pill-active" : ""}`}>
+                  <span>2</span>
+                  <strong>Logo & screenshot</strong>
+                </div>
+                <div className={`modal-step-pill ${modalStep >= 3 ? "modal-step-pill-active" : ""}`}>
+                  <span>3</span>
+                  <strong>Launch week</strong>
                 </div>
               </div>
 
+              <div className="step-meta">
+                <span className="panel-label">Step {modalStep} of {totalModalSteps}</span>
+              </div>
+
+              {modalStep === 1 ? (
+                <>
+                  <label className="field">
+                    <span>Project title</span>
+                    <input
+                      name="title"
+                      value={formData.title}
+                      onChange={handleInputChange}
+                      placeholder="AI SEO Bot"
+                      type="text"
+                    />
+                  </label>
+
+                  <label className="field">
+                    <span>Category</span>
+                    <input
+                      name="category"
+                      value={formData.category}
+                      onChange={handleInputChange}
+                      placeholder="Automation"
+                      type="text"
+                    />
+                  </label>
+
+                  <label className="field field-wide">
+                    <span>Slogan</span>
+                    <input
+                      name="slogan"
+                      value={formData.slogan}
+                      onChange={handleInputChange}
+                      placeholder="The fastest way to launch AI workflows"
+                      type="text"
+                    />
+                  </label>
+
+                  <label className="field field-wide">
+                    <span>Description</span>
+                    <textarea
+                      name="description"
+                      value={formData.description}
+                      onChange={handleInputChange}
+                      placeholder="Describe what your project does and why it matters."
+                      rows="5"
+                    />
+                  </label>
+
+                  <label className="field field-wide">
+                    <span>Project URL</span>
+                    <input
+                      name="project_url"
+                      value={formData.project_url}
+                      onChange={handleInputChange}
+                      placeholder="https://your-project.com"
+                      type="url"
+                    />
+                  </label>
+                </>
+              ) : null}
+
+              {modalStep === 2 ? (
+                <div className="field field-wide">
+                  <span>Brand assets</span>
+                  <input
+                    ref={logoInputRef}
+                    className="visually-hidden"
+                    accept="image/*"
+                    onChange={(event) => handleFileChange(event, "logo")}
+                    type="file"
+                  />
+                  <input
+                    ref={screenshotInputRef}
+                    className="visually-hidden"
+                    accept="image/*"
+                    onChange={(event) => handleFileChange(event, "screenshot")}
+                    type="file"
+                  />
+                  <div className="dropzone-grid">
+                    <button
+                      className="dropzone"
+                      onClick={() => handleDropZoneClick("logo_url")}
+                      type="button"
+                    >
+                      <strong>Logo</strong>
+                      <span>
+                        {logoFile ? logoFile.name : "Click to choose a logo from your computer"}
+                      </span>
+                    </button>
+
+                    <button
+                      className="dropzone"
+                      onClick={() => handleDropZoneClick("image_url")}
+                      type="button"
+                    >
+                      <strong>Screenshot</strong>
+                      <span>
+                        {screenshotFile
+                          ? screenshotFile.name
+                          : "Click to choose a screenshot from your computer"}
+                      </span>
+                    </button>
+                  </div>
+                  <div className="preview-grid">
+                    <div className="preview-card">
+                      <span className="preview-label">Logo preview</span>
+                      {logoFile ? (
+                        <img
+                          alt="Logo preview"
+                          className="preview-image preview-image-logo"
+                          src={URL.createObjectURL(logoFile)}
+                        />
+                      ) : (
+                        <div className="preview-placeholder">No logo selected</div>
+                      )}
+                    </div>
+                    <div className="preview-card">
+                      <span className="preview-label">Screenshot preview</span>
+                      {screenshotFile ? (
+                        <img
+                          alt="Screenshot preview"
+                          className="preview-image"
+                          src={URL.createObjectURL(screenshotFile)}
+                        />
+                      ) : (
+                        <div className="preview-placeholder">No screenshot selected</div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
+              {modalStep === 3 ? (
+                <div className="field field-wide launch-week-card">
+                  <span>Launch week</span>
+                  <input
+                    name="launch_week"
+                    value={formData.launch_week}
+                    onChange={handleInputChange}
+                    type="week"
+                  />
+                  <p className="launch-week-note">
+                    Choose the week when you plan to launch this product.
+                  </p>
+                </div>
+              ) : null}
+
               <div className="form-actions">
-                <button className="secondary-button" onClick={closeModal} type="button">
-                  Cancel
-                </button>
-                <button
-                  className="primary-button"
-                  disabled={submitStatus === "submitting"}
-                  type="submit"
-                >
-                  {submitStatus === "submitting" ? "Submitting..." : "Submit project"}
-                </button>
+                <div className="form-actions-group">
+                  <button className="secondary-button" onClick={closeModal} type="button">
+                    Cancel
+                  </button>
+                  {modalStep > 1 ? (
+                    <button className="secondary-button" onClick={handlePreviousStep} type="button">
+                      Back
+                    </button>
+                  ) : null}
+                </div>
+                {modalStep < totalModalSteps ? (
+                  <button className="primary-button" onClick={handleNextStep} type="button">
+                    Next
+                  </button>
+                ) : (
+                  <button
+                    className="primary-button"
+                    disabled={submitStatus === "submitting"}
+                    type="submit"
+                  >
+                    {submitStatus === "submitting" ? "Submitting..." : "Submit project"}
+                  </button>
+                )}
               </div>
 
               {submitMessage ? (

@@ -402,6 +402,18 @@ a {
   font-size: 1.35rem;
 }
 
+.project-slogan {
+  margin: 4px 0 0;
+  color: rgba(243, 239, 232, 0.62);
+  font-size: 0.92rem;
+  line-height: 1.4;
+}
+
+.project-slogan-large {
+  margin-top: 8px;
+  font-size: 1rem;
+}
+
 .card-content p {
   margin: 0 0 18px;
   color: rgba(243, 239, 232, 0.75);
@@ -501,6 +513,56 @@ a {
   gap: 18px;
 }
 
+.modal-steps,
+.step-meta,
+.launch-week-card,
+.form-actions-group {
+  grid-column: 1 / -1;
+}
+
+.modal-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.modal-step-pill {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.02);
+  padding: 14px 16px;
+}
+
+.modal-step-pill span,
+.modal-step-pill strong {
+  display: block;
+}
+
+.modal-step-pill span {
+  margin-bottom: 8px;
+  color: rgba(243, 239, 232, 0.48);
+  font-size: 0.82rem;
+}
+
+.modal-step-pill strong {
+  font-size: 0.98rem;
+  color: rgba(243, 239, 232, 0.72);
+}
+
+.modal-step-pill-active {
+  border-color: rgba(242, 180, 92, 0.3);
+  background: rgba(242, 180, 92, 0.08);
+}
+
+.modal-step-pill-active span,
+.modal-step-pill-active strong {
+  color: #f3efe8;
+}
+
+.step-meta {
+  margin-top: -2px;
+}
+
 .field {
   display: flex;
   flex-direction: column;
@@ -548,6 +610,12 @@ a {
   flex-wrap: wrap;
 }
 
+.form-actions-group {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
 .form-note {
   color: rgba(243, 239, 232, 0.7);
 }
@@ -580,16 +648,20 @@ a {
 }
 
 .dropzone {
-  min-height: 150px;
-  border: 1px dashed rgba(242, 180, 92, 0.45);
-  border-radius: 22px;
-  background:
-    radial-gradient(circle at top, rgba(242, 180, 92, 0.15), transparent 50%),
-    rgba(255, 255, 255, 0.03);
+  min-height: 132px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.015);
   color: #f3efe8;
-  padding: 18px;
+  padding: 20px;
   text-align: left;
   cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease;
+}
+
+.dropzone:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.025);
 }
 
 .dropzone strong,
@@ -598,12 +670,14 @@ a {
 }
 
 .dropzone strong {
-  margin-bottom: 8px;
-  font-size: 1.08rem;
+  margin-bottom: 6px;
+  font-size: 1rem;
+  font-weight: 600;
 }
 
 .dropzone span {
-  color: rgba(243, 239, 232, 0.72);
+  color: rgba(243, 239, 232, 0.58);
+  line-height: 1.45;
 }
 
 .preview-grid {
@@ -614,38 +688,55 @@ a {
 }
 
 .preview-card {
-  border-radius: 22px;
-  background: rgba(255, 255, 255, 0.03);
-  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.02);
+  padding: 12px;
 }
 
 .preview-label {
   display: block;
   margin-bottom: 10px;
-  color: rgba(243, 239, 232, 0.72);
+  color: rgba(243, 239, 232, 0.62);
+  font-size: 0.9rem;
 }
 
 .preview-image {
   width: 100%;
   height: 180px;
   object-fit: cover;
-  border-radius: 16px;
+  border-radius: 14px;
 }
 
 .preview-image-logo {
   object-fit: contain;
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(255, 255, 255, 0.015);
   padding: 12px;
 }
 
 .preview-placeholder {
   height: 180px;
-  border: 1px dashed rgba(255, 255, 255, 0.18);
-  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.01);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: rgba(243, 239, 232, 0.5);
+  color: rgba(243, 239, 232, 0.42);
+  font-size: 0.95rem;
+}
+
+.launch-week-card {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.02);
+  padding: 20px;
+}
+
+.launch-week-note {
+  margin: 0;
+  color: rgba(243, 239, 232, 0.58);
+  font-size: 0.92rem;
 }
 
 .modal-backdrop {
@@ -717,6 +808,7 @@ a {
   .hero,
   .projects-grid,
   .project-form,
+  .modal-steps,
   .dropzone-grid,
   .dashboard-summary,
   .project-page-grid,

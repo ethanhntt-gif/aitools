@@ -26,6 +26,7 @@ npm run dev
 ```text
 id
 title
+slogan
 description
 category
 project_url
