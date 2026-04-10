@@ -1,0 +1,25 @@
+SUPABASE DASHBOARD
+==================
+
+Open:
+Authentication -> Providers -> Google
+
+Paste here:
+
+Client ID:
+
+Client Secret:
+
+
+SUPABASE URL CONFIGURATION
+==========================
+
+Open:
+Authentication -> URL Configuration
+
+Site URL:
+http://localhost:5173
+
+Redirect URLs:
+http://localhost:5173
+https://your-cloudflare-project.pages.dev
