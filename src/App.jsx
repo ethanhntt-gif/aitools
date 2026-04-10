@@ -1,5 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { hasSupabaseCredentials, supabase } from "./lib/supabase";
+import HomeView from "./components/HomeView";
+import { SparklesIcon } from "./components/icons";
+import { CategoryView, DashboardView, ProjectView } from "./components/SecondaryViews";
+import SubmitModal from "./components/SubmitModal";
+import { Surface } from "./components/ui";
 
 const demoProjects = [
   {
@@ -47,6 +52,8 @@ const initialForm = {
 
 const storageBucket = "project-assets";
 const totalModalSteps = 3;
+const maxCategories = 5;
+
 const categoryOptions = [
   "Automation",
   "AI Agents",
@@ -152,7 +159,6 @@ function App() {
         ? "Live project cards are loaded from Supabase."
         : "The projects table is empty right now."
     );
-
   }
 
   async function loadMyProjects(activeSession = session) {
@@ -230,6 +236,7 @@ function App() {
       if (path === "/dashboard") {
         setActiveView("dashboard");
         setActiveSlug("");
+        setActiveCategorySlug("");
         setHomeCategoryFilterSlug("");
         return;
       }
@@ -337,12 +344,25 @@ function App() {
   function selectCategory(categoryOption) {
     setSubmitStatus("idle");
     setSubmitMessage("");
-    setFormData((current) => ({
-      ...current,
-      category: current.category.includes(categoryOption)
-        ? current.category.filter((item) => item !== categoryOption)
-        : [...current.category, categoryOption]
-    }));
+    setFormData((current) => {
+      if (current.category.includes(categoryOption)) {
+        return {
+          ...current,
+          category: current.category.filter((item) => item !== categoryOption)
+        };
+      }
+
+      if (current.category.length >= maxCategories) {
+        setSubmitStatus("error");
+        setSubmitMessage(`You can choose up to ${maxCategories} categories.`);
+        return current;
+      }
+
+      return {
+        ...current,
+        category: [...current.category, categoryOption]
+      };
+    });
   }
 
   function validateModalStep(step) {
@@ -414,7 +434,6 @@ function App() {
     }
 
     const logoUpload = await uploadAsset(logoFile, "logos");
-
     if (!logoUpload.success) {
       setSubmitStatus("error");
       setSubmitMessage(logoUpload.message);
@@ -422,7 +441,6 @@ function App() {
     }
 
     const screenshotUpload = await uploadAsset(screenshotFile, "screenshots");
-
     if (!screenshotUpload.success) {
       setSubmitStatus("error");
       setSubmitMessage(screenshotUpload.message);
@@ -442,7 +460,6 @@ function App() {
     };
 
     const { error } = await supabase.from("projects").insert(payload);
-
     if (error) {
       setSubmitStatus("error");
       setSubmitMessage(
@@ -495,6 +512,7 @@ function App() {
     setActiveView("home");
     setActiveSlug("");
     setActiveCategorySlug("");
+    setHomeCategoryFilterSlug("");
     setIsMenuOpen(false);
   }
 
@@ -539,7 +557,6 @@ function App() {
 
   function handleFileChange(event, type) {
     const file = event.target.files?.[0];
-
     if (!file) {
       return;
     }
@@ -554,39 +571,49 @@ function App() {
 
   async function uploadAsset(file, folder) {
     if (!supabase || !session) {
-      return {
-        success: false,
-        message: "You must be signed in to upload files."
-      };
+      return { success: false, message: "You must be signed in to upload files." };
     }
 
     const extension = file.name.includes(".") ? file.name.split(".").pop() : "png";
     const fileName = `${crypto.randomUUID()}.${extension}`;
     const filePath = `${session.user.id}/${folder}/${fileName}`;
 
-    const { error: uploadError } = await supabase.storage
-      .from(storageBucket)
-      .upload(filePath, file, {
-        cacheControl: "3600",
-        upsert: false,
-        contentType: file.type
-      });
+    const { error: uploadError } = await supabase.storage.from(storageBucket).upload(filePath, file, {
+      cacheControl: "3600",
+      upsert: false,
+      contentType: file.type
+    });
 
     if (uploadError) {
       console.error(uploadError);
       return {
         success: false,
-        message:
-          "File upload failed. Create the Supabase bucket and storage policies for authenticated uploads."
+        message: "File upload failed. Create the Supabase bucket and storage policies for authenticated uploads."
       };
     }
 
     const { data } = supabase.storage.from(storageBucket).getPublicUrl(filePath);
+    return { success: true, publicUrl: data.publicUrl };
+  }
 
-    return {
-      success: true,
-      publicUrl: data.publicUrl
-    };
+  function openSubmitFlow() {
+    if (session) {
+      openModal();
+      return;
+    }
+
+    if (hasSupabaseCredentials) {
+      handleGoogleSignIn();
+    }
+  }
+
+  function scrollToSection(sectionId) {
+    document.getElementById(sectionId)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function getProjectCategories(project) {
+    const categories = getCategoryList(project.category);
+    return categories.length ? categories : ["Project"];
   }
 
   const userName =
@@ -594,20 +621,13 @@ function App() {
     session?.user?.user_metadata?.name ||
     session?.user?.email ||
     "Signed in";
-
   const userAvatar = session?.user?.user_metadata?.avatar_url;
   const activeProject = projects.find((project) => slugify(project.title) === activeSlug);
-  const allCategoryNames = Array.from(
-    new Set(
-      projects.flatMap((project) => getCategoryList(project.category))
-    )
-  );
+  const allCategoryNames = Array.from(new Set(projects.flatMap((project) => getCategoryList(project.category))));
   const activeCategoryName =
     allCategoryNames.find((categoryName) => getCategorySlug(categoryName) === activeCategorySlug) || "";
   const categoryProjects = projects.filter((project) =>
-    getCategoryList(project.category).some(
-      (categoryName) => getCategorySlug(categoryName) === activeCategorySlug
-    )
+    getCategoryList(project.category).some((categoryName) => getCategorySlug(categoryName) === activeCategorySlug)
   );
   const filteredHomeProjects = homeCategoryFilterSlug
     ? projects.filter((project) =>
@@ -621,739 +641,187 @@ function App() {
     slug: getCategorySlug(categoryName),
     count: projects.filter((project) => getCategoryList(project.category).includes(categoryName)).length
   }));
+  const trendingProjects = filteredHomeProjects.slice(0, 3);
+  const newlyAddedProjects = filteredHomeProjects.slice(3, 6).length
+    ? filteredHomeProjects.slice(3, 6)
+    : filteredHomeProjects.slice(0, 3);
 
   return (
-    <div className="page-shell">
-      <header className="site-header">
-        <div className="brand-block">
-          <span className="brand-kicker">AI Tools</span>
-          <button className="brand-name brand-button" onClick={openHome} type="button">
-            Listing Hub
-          </button>
-        </div>
-        <nav className="nav-links" aria-label="Primary">
-          <button className="nav-link-button" onClick={openHome} type="button">
-            Projects
-          </button>
-          <a href="#about">About</a>
-          <a href="#contact">Contact</a>
-        </nav>
-        <div className="auth-controls">
-          {hasSupabaseCredentials ? (
-            session ? (
-              <div className="user-menu-wrap">
-                <button className="avatar-button" onClick={toggleMenu} type="button">
-                  {userAvatar ? (
-                    <img className="user-avatar" src={userAvatar} alt={userName} />
-                  ) : (
-                    <span className="user-avatar user-avatar-fallback">
-                      {userName.slice(0, 1).toUpperCase()}
-                    </span>
-                  )}
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(125,211,252,0.22),_transparent_35%),radial-gradient(circle_at_top_right,_rgba(226,232,240,0.65),_transparent_30%),linear-gradient(180deg,_#f8fbff_0%,_#f8fafc_40%,_#f1f5f9_100%)] text-slate-900">
+      <div className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 pb-10 pt-4 sm:px-6 lg:px-8">
+        <header className="sticky top-4 z-40">
+          <Surface className="px-5 py-4 sm:px-6">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex items-center justify-between gap-4">
+                <button className="flex items-center gap-3 text-left" onClick={openHome} type="button">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-950 text-white">
+                    <SparklesIcon className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.3em] text-sky-600">AI Tools</p>
+                    <p className="text-lg font-semibold tracking-tight text-slate-950">Listing Hub</p>
+                  </div>
                 </button>
-                {isMenuOpen ? (
-                  <div className="user-menu">
-                    <div className="user-menu-meta">
-                      <strong>{userName}</strong>
-                      <span>{session.user.email}</span>
-                    </div>
-                    <button className="menu-item" onClick={openModal} type="button">
-                      Submit product
-                    </button>
-                    <button className="menu-item" onClick={openDashboard} type="button">
-                      Dashboard
-                    </button>
-                    <button className="menu-item menu-item-danger" onClick={handleSignOut} type="button">
-                      Sign out
-                    </button>
-                  </div>
-                ) : null}
               </div>
-            ) : (
-              <button
-                className="primary-button"
-                onClick={handleGoogleSignIn}
-                type="button"
-                disabled={authLoading}
-              >
-                {authLoading ? "Checking session..." : "Submit"}
-              </button>
-            )
-          ) : (
-            <span className="setup-note">Add Supabase keys to enable Google sign-in.</span>
-          )}
-        </div>
-      </header>
 
-      <main>
-        {activeView === "dashboard" ? (
-          <section className="dashboard-page" id="dashboard">
-            <div className="section-heading">
-              <div>
-                <p className="eyebrow">Personal workspace</p>
-                <h2>Your dashboard</h2>
+              <div className="flex flex-wrap items-center gap-2">
+                <button className="rounded-full px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-950" onClick={openHome} type="button">
+                  Browse Tools
+                </button>
+                <button className="rounded-full px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-950" onClick={() => scrollToSection("features")} type="button">
+                  Features
+                </button>
+                <button className="rounded-full px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-950" onClick={() => scrollToSection("footer")} type="button">
+                  Contact
+                </button>
               </div>
-              <button className="secondary-button" onClick={openHome} type="button">
-                Back to home
-              </button>
-            </div>
 
-            {session ? (
-              <>
-                <div className="dashboard-summary">
-                  <div className="summary-card">
-                    <span className="panel-label">Owner</span>
-                    <strong>{userName}</strong>
-                    <p>{session.user.email}</p>
-                  </div>
-                  <div className="summary-card">
-                    <span className="panel-label">Submitted projects</span>
-                    <strong>{myProjects.length}</strong>
-                    <p>Only your own projects are shown here.</p>
-                  </div>
-                </div>
-
-                <div className="section-heading dashboard-actions">
-                  <div>
-                    <p className="eyebrow">Your content</p>
-                    <h2>My projects</h2>
-                  </div>
-                  <button className="primary-button" onClick={openModal} type="button">
-                    Submit product
-                  </button>
-                </div>
-
-                <div className="projects-grid">
-                  {myProjects.map((project) => (
-                    <article className="project-card" key={project.id}>
-                      <div
-                        className="project-visual"
-                        style={{
-                          backgroundImage: `linear-gradient(180deg, rgba(14, 19, 24, 0.05), rgba(14, 19, 24, 0.78)), url(${project.image_url})`
-                        }}
+              <div className="flex items-center gap-3">
+                {hasSupabaseCredentials ? (
+                  session ? (
+                    <div className="relative">
+                      <button
+                        className="flex items-center gap-3 rounded-full border border-slate-200 bg-white px-3 py-2 text-left transition hover:border-slate-300"
+                        onClick={toggleMenu}
+                        type="button"
                       >
-                        <div className="project-category-list">
-                          {(getCategoryList(project.category).length
-                            ? getCategoryList(project.category)
-                            : ["Project"]
-                          ).map((categoryItem) => (
-                            <button
-                              className="project-category-tag"
-                              key={`${project.id}-${categoryItem}`}
-                              onClick={() => openCategoryPage(categoryItem)}
-                              type="button"
-                            >
-                              {categoryItem}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                      <div className="card-content">
-                        <div className="card-title-row">
-                          {project.logo_url ? (
-                            <img className="project-logo" src={project.logo_url} alt={project.title} />
-                          ) : null}
-                          <div>
-                            <h3>{project.title}</h3>
-                            {project.slogan ? (
-                              <p className="project-slogan">{project.slogan}</p>
-                            ) : null}
-                          </div>
-                        </div>
-                        <div className="card-actions">
-                          <button className="link-button" onClick={() => openProject(project)} type="button">
-                            View details
-                          </button>
-                          <a href={project.project_url || "#"} target="_blank" rel="noreferrer">
-                            Visit →
-                          </a>
-                        </div>
-                      </div>
-                    </article>
-                  ))}
-                </div>
-
-                {!myProjects.length ? (
-                  <div className="empty-state">
-                    You have not submitted any projects yet. Use `Submit product` to add your first one.
-                  </div>
-                ) : null}
-              </>
-            ) : (
-              <div className="submit-locked">
-                Sign in with Google first to open your personal dashboard.
-              </div>
-            )}
-          </section>
-        ) : activeView === "project" ? (
-          <section className="project-page">
-            {activeProject ? (
-              <>
-                <div className="section-heading">
-                  <div>
-                    <p className="eyebrow">Project page</p>
-                    <h2>{activeProject.title}</h2>
-                  </div>
-                  <button className="secondary-button" onClick={openHome} type="button">
-                    Back to projects
-                  </button>
-                </div>
-
-                <div className="project-page-grid">
-                  <div className="project-page-main">
-                    <div
-                      className="project-page-hero"
-                      style={{
-                        backgroundImage: `linear-gradient(180deg, rgba(14, 19, 24, 0.05), rgba(14, 19, 24, 0.78)), url(${activeProject.image_url})`
-                      }}
-                    />
-                    <div className="project-page-copy">
-                      <div className="card-title-row">
-                        {activeProject.logo_url ? (
-                          <img
-                            className="project-logo project-logo-large"
-                            src={activeProject.logo_url}
-                            alt={activeProject.title}
-                          />
-                        ) : null}
-                        <div>
-                          <span className="panel-label">
-                            {getCategoryList(activeProject.category).join(" • ") || "Project"}
+                        {userAvatar ? (
+                          <img className="h-10 w-10 rounded-full object-cover" src={userAvatar} alt={userName} />
+                        ) : (
+                          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-950 text-sm font-semibold text-white">
+                            {userName.slice(0, 1).toUpperCase()}
                           </span>
-                          <h3>{activeProject.title}</h3>
-                          {activeProject.slogan ? (
-                            <p className="project-slogan project-slogan-large">{activeProject.slogan}</p>
-                          ) : null}
-                        </div>
-                      </div>
-                      <p>{activeProject.description || "No description provided yet."}</p>
-                    </div>
-                  </div>
-
-                  <aside className="project-page-sidebar">
-                    <div className="summary-card">
-                      <span className="panel-label">Slug</span>
-                      <strong>{activeSlug}</strong>
-                      <p>Generated from the project title.</p>
-                    </div>
-                    <div className="summary-card">
-                      <span className="panel-label">Visit project</span>
-                      <a
-                        className="primary-button project-visit-button"
-                        href={activeProject.project_url || "#"}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        Open live site
-                      </a>
-                    </div>
-                  </aside>
-                </div>
-              </>
-            ) : (
-              <div className="submit-locked">
-                Project not found. Try going back to the homepage and opening it again.
-              </div>
-            )}
-          </section>
-        ) : activeView === "category" ? (
-          <section className="category-page">
-            <div className="section-heading">
-              <div>
-                <p className="eyebrow">Category page</p>
-                <h2>{activeCategoryName || "Category"}</h2>
-              </div>
-              <button className="secondary-button" onClick={openHome} type="button">
-                Back to projects
-              </button>
-            </div>
-
-            <div className="content-with-sidebar">
-              <div className="content-main">
-                <div className="category-summary">
-                  <span className="panel-label">Projects found</span>
-                  <strong>{categoryProjects.length}</strong>
-                  <p>
-                    {activeCategoryName
-                      ? `Browse all projects tagged with ${activeCategoryName}.`
-                      : "Browse all projects in this category."}
-                  </p>
-                </div>
-
-                <div className="projects-grid">
-                  {categoryProjects.map((project) => (
-                    <article className="project-card" key={project.id}>
-                      <div
-                        className="project-visual"
-                        style={{
-                          backgroundImage: `linear-gradient(180deg, rgba(14, 19, 24, 0.05), rgba(14, 19, 24, 0.78)), url(${project.image_url})`
-                        }}
-                      >
-                        <div className="project-category-list">
-                          {(getCategoryList(project.category).length
-                            ? getCategoryList(project.category)
-                            : ["Project"]
-                          ).map((categoryItem) => (
-                            <button
-                              className="project-category-tag"
-                              key={`${project.id}-${categoryItem}`}
-                              onClick={() => openCategoryPage(categoryItem)}
-                              type="button"
-                            >
-                              {categoryItem}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                      <div className="card-content">
-                        <div className="card-title-row">
-                          {project.logo_url ? (
-                            <img className="project-logo" src={project.logo_url} alt={project.title} />
-                          ) : null}
-                          <div>
-                            <h3>{project.title}</h3>
-                            {project.slogan ? <p className="project-slogan">{project.slogan}</p> : null}
+                        )}
+                        <span className="hidden text-sm font-medium text-slate-700 sm:inline">{userName}</span>
+                      </button>
+                      {isMenuOpen ? (
+                        <Surface className="absolute right-0 top-[calc(100%+12px)] w-64 p-2">
+                          <div className="rounded-2xl px-3 py-3">
+                            <p className="text-sm font-semibold text-slate-950">{userName}</p>
+                            <p className="mt-1 text-xs text-slate-500">{session.user.email}</p>
                           </div>
-                        </div>
-                        <div className="card-actions">
-                          <button className="link-button" onClick={() => openProject(project)} type="button">
-                            View details
+                          <button className="w-full rounded-2xl px-3 py-2 text-left text-sm font-medium text-slate-700 transition hover:bg-slate-50 hover:text-slate-950" onClick={openModal} type="button">
+                            Submit Tool
                           </button>
-                          <a href={project.project_url || "#"} target="_blank" rel="noreferrer">
-                            Visit →
-                          </a>
-                        </div>
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              </div>
-
-              <aside className="category-sidebar">
-                <p className="eyebrow">Categories</p>
-                <div className="category-sidebar-list">
-                  {categoryCounts.map((categoryItem) => (
-                    <div
-                      className={`category-sidebar-item ${
-                        categoryItem.slug === activeCategorySlug ? "category-sidebar-item-active" : ""
-                      }`}
-                      key={categoryItem.slug}
-                    >
-                      <span>{categoryItem.name}</span>
-                      <strong>{categoryItem.count}</strong>
-                    </div>
-                  ))}
-                </div>
-              </aside>
-            </div>
-
-            {!categoryProjects.length ? (
-              <div className="empty-state">
-                No projects were found for this category yet.
-              </div>
-            ) : null}
-          </section>
-        ) : (
-          <>
-            <section className="hero">
-              <div className="hero-copy">
-                <p className="eyebrow">Supabase-powered homepage</p>
-                <h1>Publish your AI projects in a clean listing hub.</h1>
-                <p className="hero-text">
-                  A modern homepage with a strong header, a grounded footer, and
-                  project cards rendered directly from your Supabase database and
-                  paired with Google sign-in.
-                </p>
-              </div>
-              <div className="hero-panel">
-                <p className="panel-label">Session Status</p>
-                <strong>
-                  {!hasSupabaseCredentials
-                    ? "Demo Mode"
-                    : session
-                      ? "Authenticated"
-                      : "Guest Session"}
-                </strong>
-                <p>{message || "Preparing project data..."}</p>
-              </div>
-            </section>
-
-            <section className="projects-section" id="projects">
-              <div className="section-heading">
-                <div>
-                  <p className="eyebrow">Featured work</p>
-                  <h2>Project cards</h2>
-                </div>
-                <span className={`status-pill status-${status}`}>{status}</span>
-              </div>
-
-              <div className="content-with-sidebar">
-                <div className="content-main">
-                  <div className="projects-grid">
-                    {filteredHomeProjects.map((project) => (
-                      <article className="project-card" key={project.id}>
-                        <div
-                          className="project-visual"
-                          style={{
-                            backgroundImage: `linear-gradient(180deg, rgba(14, 19, 24, 0.05), rgba(14, 19, 24, 0.78)), url(${project.image_url})`
-                          }}
-                        >
-                          <div className="project-category-list">
-                            {(getCategoryList(project.category).length
-                              ? getCategoryList(project.category)
-                              : ["Project"]
-                            ).map((categoryItem) => (
-                              <button
-                                className="project-category-tag"
-                                key={`${project.id}-${categoryItem}`}
-                                onClick={() => openCategoryPage(categoryItem)}
-                                type="button"
-                              >
-                                {categoryItem}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                        <div className="card-content">
-                          <div className="card-title-row">
-                            {project.logo_url ? (
-                              <img className="project-logo" src={project.logo_url} alt={project.title} />
-                            ) : null}
-                            <div>
-                              <h3>{project.title}</h3>
-                              {project.slogan ? (
-                                <p className="project-slogan">{project.slogan}</p>
-                              ) : null}
-                            </div>
-                          </div>
-                          <div className="card-actions">
-                            <button className="link-button" onClick={() => openProject(project)} type="button">
-                              View details
-                            </button>
-                            <a href={project.project_url || "#"} target="_blank" rel="noreferrer">
-                              Visit →
-                            </a>
-                          </div>
-                        </div>
-                      </article>
-                    ))}
-                  </div>
-                </div>
-
-                <aside className="category-sidebar">
-                  <p className="eyebrow">Categories</p>
-                  <div className="category-sidebar-list">
-                    {categoryCounts.map((categoryItem) => (
-                      <button
-                        className={`category-sidebar-item ${
-                          categoryItem.slug === homeCategoryFilterSlug
-                            ? "category-sidebar-item-active"
-                            : ""
-                        }`}
-                        key={categoryItem.slug}
-                        onClick={() => toggleHomeCategoryFilter(categoryItem.name)}
-                        type="button"
-                      >
-                        <span>{categoryItem.name}</span>
-                        <strong>{categoryItem.count}</strong>
-                      </button>
-                    ))}
-                  </div>
-                </aside>
-              </div>
-
-              {!filteredHomeProjects.length && status === "ready" ? (
-                <div className="empty-state">
-                  No projects match this category filter.
-                </div>
-              ) : null}
-
-              {!projects.length && status === "ready" ? (
-                <div className="empty-state">
-                  Add rows into your Supabase `projects` table to populate the listing.
-                </div>
-              ) : null}
-            </section>
-
-            <section className="about-section" id="about">
-              <p className="eyebrow">Suggested schema</p>
-              <p>
-                Use a `projects` table with fields like `id`, `title`, `slogan`,
-                `description`, `category`, `project_url`, `image_url`, and `created_at`.
-              </p>
-              <p>
-                For Google sign-in, enable the Google provider in Supabase Auth and
-                add your local and production callback URLs in both Supabase and
-                Google Cloud Console.
-              </p>
-              <p>
-                To let logged-in users submit projects, add an insert policy for
-                authenticated users in Supabase RLS.
-              </p>
-            </section>
-          </>
-        )}
-      </main>
-
-      <footer className="site-footer" id="contact">
-        <p>AI Tools Listing</p>
-        <p>Built for fast publishing, simple maintenance, and clean project discovery.</p>
-      </footer>
-
-      {isModalOpen ? (
-        <div className="modal-backdrop" onClick={closeModal} role="presentation">
-          <div
-            className="modal-card"
-            onClick={(event) => event.stopPropagation()}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="submit-project-title"
-          >
-            <div className="modal-header">
-              <div>
-                <p className="eyebrow">Community publishing</p>
-                <h2 id="submit-project-title">Submit your project</h2>
-              </div>
-              <button className="icon-button" onClick={closeModal} type="button">
-                Close
-              </button>
-            </div>
-
-            <form className="project-form" onSubmit={handleProjectSubmit}>
-              <div className="modal-steps">
-                <div className={`modal-step-pill ${modalStep >= 1 ? "modal-step-pill-active" : ""}`}>
-                  <span>1</span>
-                  <strong>Information</strong>
-                </div>
-                <div className={`modal-step-pill ${modalStep >= 2 ? "modal-step-pill-active" : ""}`}>
-                  <span>2</span>
-                  <strong>Logo & screenshot</strong>
-                </div>
-                <div className={`modal-step-pill ${modalStep >= 3 ? "modal-step-pill-active" : ""}`}>
-                  <span>3</span>
-                  <strong>Launch week</strong>
-                </div>
-              </div>
-
-              <div className="step-meta">
-                <span className="panel-label">Step {modalStep} of {totalModalSteps}</span>
-              </div>
-
-              {modalStep === 1 ? (
-                <>
-                  <label className="field">
-                    <span>Project title</span>
-                    <input
-                      name="title"
-                      value={formData.title}
-                      onChange={handleInputChange}
-                      placeholder="AI SEO Bot"
-                      type="text"
-                    />
-                  </label>
-
-                  <label className="field">
-                    <span>Category</span>
-                    <div className="custom-select" ref={categoryMenuRef}>
-                      <button
-                        aria-expanded={isCategoryMenuOpen}
-                        aria-haspopup="listbox"
-                        className={`custom-select-trigger ${
-                          isCategoryMenuOpen ? "custom-select-trigger-open" : ""
-                        }`}
-                        onClick={toggleCategoryMenu}
-                        type="button"
-                      >
-                        <span className={formData.category.length ? "custom-select-values" : "custom-select-placeholder"}>
-                          {formData.category.length ? formData.category.join(", ") : "Choose categories"}
-                        </span>
-                        <span className="custom-select-chevron" aria-hidden="true" />
-                      </button>
-
-                      {isCategoryMenuOpen ? (
-                        <div className="custom-select-menu" role="listbox" aria-label="Category options">
-                          {categoryOptions.map((categoryOption) => (
-                            <button
-                              key={categoryOption}
-                              className={`custom-select-option ${
-                                formData.category.includes(categoryOption) ? "custom-select-option-active" : ""
-                              }`}
-                              onClick={() => selectCategory(categoryOption)}
-                              aria-selected={formData.category.includes(categoryOption)}
-                              role="option"
-                              type="button"
-                            >
-                              <span className="custom-select-option-mark">
-                                {formData.category.includes(categoryOption) ? "✓" : ""}
-                              </span>
-                              {categoryOption}
-                            </button>
-                          ))}
-                        </div>
+                          <button className="w-full rounded-2xl px-3 py-2 text-left text-sm font-medium text-slate-700 transition hover:bg-slate-50 hover:text-slate-950" onClick={openDashboard} type="button">
+                            Dashboard
+                          </button>
+                          <button className="w-full rounded-2xl px-3 py-2 text-left text-sm font-medium text-rose-600 transition hover:bg-rose-50" onClick={handleSignOut} type="button">
+                            Sign out
+                          </button>
+                        </Surface>
                       ) : null}
                     </div>
-                  </label>
-
-                  <label className="field field-wide">
-                    <span>Slogan</span>
-                    <input
-                      name="slogan"
-                      value={formData.slogan}
-                      onChange={handleInputChange}
-                      placeholder="The fastest way to launch AI workflows"
-                      type="text"
-                    />
-                  </label>
-
-                  <label className="field field-wide">
-                    <span>Description</span>
-                    <textarea
-                      name="description"
-                      value={formData.description}
-                      onChange={handleInputChange}
-                      placeholder="Describe what your project does and why it matters."
-                      rows="5"
-                    />
-                  </label>
-
-                  <label className="field field-wide">
-                    <span>Project URL</span>
-                    <input
-                      name="project_url"
-                      value={formData.project_url}
-                      onChange={handleInputChange}
-                      placeholder="https://your-project.com"
-                      type="url"
-                    />
-                  </label>
-                </>
-              ) : null}
-
-              {modalStep === 2 ? (
-                <div className="field field-wide">
-                  <span>Brand assets</span>
-                  <input
-                    ref={logoInputRef}
-                    className="visually-hidden"
-                    accept="image/*"
-                    onChange={(event) => handleFileChange(event, "logo")}
-                    type="file"
-                  />
-                  <input
-                    ref={screenshotInputRef}
-                    className="visually-hidden"
-                    accept="image/*"
-                    onChange={(event) => handleFileChange(event, "screenshot")}
-                    type="file"
-                  />
-                  <div className="dropzone-grid">
+                  ) : (
                     <button
-                      className="dropzone"
-                      onClick={() => handleDropZoneClick("logo_url")}
+                      className="inline-flex items-center justify-center rounded-full bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition duration-300 hover:bg-sky-600 disabled:cursor-not-allowed disabled:opacity-60"
+                      onClick={handleGoogleSignIn}
                       type="button"
+                      disabled={authLoading}
                     >
-                      <strong>Logo</strong>
-                      <span>
-                        {logoFile ? logoFile.name : "Click to choose a logo from your computer"}
-                      </span>
+                      {authLoading ? "Checking session..." : "Submit Tool"}
                     </button>
-
-                    <button
-                      className="dropzone"
-                      onClick={() => handleDropZoneClick("image_url")}
-                      type="button"
-                    >
-                      <strong>Screenshot</strong>
-                      <span>
-                        {screenshotFile
-                          ? screenshotFile.name
-                          : "Click to choose a screenshot from your computer"}
-                      </span>
-                    </button>
-                  </div>
-                  <div className="preview-grid">
-                    <div className="preview-card">
-                      <span className="preview-label">Logo preview</span>
-                      {logoFile ? (
-                        <img
-                          alt="Logo preview"
-                          className="preview-image preview-image-logo"
-                          src={URL.createObjectURL(logoFile)}
-                        />
-                      ) : (
-                        <div className="preview-placeholder">No logo selected</div>
-                      )}
-                    </div>
-                    <div className="preview-card">
-                      <span className="preview-label">Screenshot preview</span>
-                      {screenshotFile ? (
-                        <img
-                          alt="Screenshot preview"
-                          className="preview-image"
-                          src={URL.createObjectURL(screenshotFile)}
-                        />
-                      ) : (
-                        <div className="preview-placeholder">No screenshot selected</div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ) : null}
-
-              {modalStep === 3 ? (
-                <div className="field field-wide launch-week-card">
-                  <span>Launch week</span>
-                  <input
-                    name="launch_week"
-                    value={formData.launch_week}
-                    onChange={handleInputChange}
-                    type="week"
-                  />
-                  <p className="launch-week-note">
-                    Choose the week when you plan to launch this product.
-                  </p>
-                </div>
-              ) : null}
-
-              <div className="form-actions">
-                <div className="form-actions-group">
-                  <button className="secondary-button" onClick={closeModal} type="button">
-                    Cancel
-                  </button>
-                  {modalStep > 1 ? (
-                    <button className="secondary-button" onClick={handlePreviousStep} type="button">
-                      Back
-                    </button>
-                  ) : null}
-                </div>
-                {modalStep < totalModalSteps ? (
-                  <button className="primary-button" onClick={handleNextStep} type="button">
-                    Next
-                  </button>
+                  )
                 ) : (
-                  <button
-                    className="primary-button"
-                    disabled={submitStatus === "submitting"}
-                    type="submit"
-                  >
-                    {submitStatus === "submitting" ? "Submitting..." : "Submit project"}
-                  </button>
+                  <span className="hidden text-sm font-medium text-slate-500 sm:inline">Add Supabase keys to enable sign-in.</span>
                 )}
               </div>
+            </div>
+          </Surface>
+        </header>
 
-              {submitMessage ? (
-                <p
-                  className={`form-feedback ${
-                    submitStatus === "error" ? "form-feedback-error" : "form-feedback-success"
-                  }`}
-                >
-                  {submitMessage}
+        <main className="flex-1 pt-8">
+          {activeView === "dashboard" ? (
+            <DashboardView
+              session={session}
+              userName={userName}
+              myProjects={myProjects}
+              openHome={openHome}
+              openModal={openModal}
+              openProject={openProject}
+              openCategoryPage={openCategoryPage}
+              getProjectCategories={getProjectCategories}
+            />
+          ) : activeView === "project" ? (
+            <ProjectView activeProject={activeProject} activeSlug={activeSlug} openHome={openHome} openCategoryPage={openCategoryPage} />
+          ) : activeView === "category" ? (
+            <CategoryView
+              activeCategoryName={activeCategoryName}
+              categoryProjects={categoryProjects}
+              categoryCounts={categoryCounts}
+              activeCategorySlug={activeCategorySlug}
+              openHome={openHome}
+              openProject={openProject}
+              openCategoryPage={openCategoryPage}
+              getProjectCategories={getProjectCategories}
+            />
+          ) : (
+            <HomeView
+              status={status}
+              trendingProjects={trendingProjects}
+              newlyAddedProjects={newlyAddedProjects}
+              filteredHomeProjects={filteredHomeProjects}
+              projects={projects}
+              categoryCounts={categoryCounts}
+              homeCategoryFilterSlug={homeCategoryFilterSlug}
+              openProject={openProject}
+              openCategoryPage={openCategoryPage}
+              toggleHomeCategoryFilter={toggleHomeCategoryFilter}
+              setHomeCategoryFilterSlug={setHomeCategoryFilterSlug}
+              scrollToSection={scrollToSection}
+              openSubmitFlow={openSubmitFlow}
+              getProjectCategories={getProjectCategories}
+            />
+          )}
+        </main>
+
+        <footer className="mt-20" id="footer">
+          <Surface className="px-6 py-8 sm:px-8">
+            <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+              <div className="space-y-3">
+                <p className="text-lg font-semibold tracking-tight text-slate-950">AI Tools Listing</p>
+                <p className="max-w-xl text-sm leading-7 text-slate-600">
+                  Your ultimate destination for discovering AI tools.
                 </p>
-              ) : null}
-            </form>
-          </div>
-        </div>
-      ) : null}
+              </div>
+              <div className="flex flex-wrap gap-6 text-sm font-medium text-slate-500">
+                <button className="transition hover:text-slate-950" onClick={openHome} type="button">Browse</button>
+                <button className="transition hover:text-slate-950" onClick={() => scrollToSection("features")} type="button">Features</button>
+                <button className="transition hover:text-slate-950" onClick={openSubmitFlow} type="button">Submit</button>
+              </div>
+            </div>
+            <div className="mt-8 border-t border-slate-200 pt-6 text-sm text-slate-500">
+              Copyright {new Date().getFullYear()} AI Tools Listing. All rights reserved.
+            </div>
+          </Surface>
+        </footer>
+      </div>
+
+      <SubmitModal
+        isOpen={isModalOpen}
+        closeModal={closeModal}
+        modalStep={modalStep}
+        totalModalSteps={totalModalSteps}
+        submitStatus={submitStatus}
+        submitMessage={submitMessage}
+        formData={formData}
+        categoryOptions={categoryOptions}
+        maxCategories={maxCategories}
+        isCategoryMenuOpen={isCategoryMenuOpen}
+        categoryMenuRef={categoryMenuRef}
+        toggleCategoryMenu={toggleCategoryMenu}
+        selectCategory={selectCategory}
+        handleInputChange={handleInputChange}
+        logoInputRef={logoInputRef}
+        screenshotInputRef={screenshotInputRef}
+        handleFileChange={handleFileChange}
+        handleDropZoneClick={handleDropZoneClick}
+        logoFile={logoFile}
+        screenshotFile={screenshotFile}
+        handlePreviousStep={handlePreviousStep}
+        handleNextStep={handleNextStep}
+        handleProjectSubmit={handleProjectSubmit}
+      />
     </div>
   );
 }
