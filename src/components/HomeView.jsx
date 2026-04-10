@@ -7,6 +7,7 @@ import {
   MegaphoneIcon,
   PenIcon,
   RefreshIcon,
+  SearchIcon,
   SparklesIcon,
   VideoIcon
 } from "./icons";
@@ -16,6 +17,7 @@ import {
   FeatureCard,
   SectionIntro,
   StatCard,
+  StatusBadge,
   Surface,
   ToolCard
 } from "./ui";
@@ -52,13 +54,18 @@ export default function HomeView({
   trendingProjects,
   newlyAddedProjects,
   filteredHomeProjects,
+  visibleHomeProjects,
+  hasMoreHomeProjects,
   projects,
   categoryCounts,
   homeCategoryFilterSlug,
+  searchQuery,
   openProject,
   openCategoryPage,
   toggleHomeCategoryFilter,
   setHomeCategoryFilterSlug,
+  handleSearchQueryChange,
+  showMoreProjects,
   scrollToSection,
   openSubmitFlow,
   getProjectCategories
@@ -110,6 +117,20 @@ export default function HomeView({
           action={<StatusBadge status={status} />}
         />
 
+        <Surface className="p-4 sm:p-5">
+          <label className="relative block">
+            <span className="sr-only">Search tools</span>
+            <SearchIcon className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+            <input
+              className="w-full rounded-2xl border border-slate-200 bg-white py-3 pl-12 pr-4 text-sm text-slate-950 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
+              onChange={handleSearchQueryChange}
+              placeholder="Search by tool name, slogan, or category"
+              type="search"
+              value={searchQuery}
+            />
+          </label>
+        </Surface>
+
         <div className="grid gap-6 xl:grid-cols-[280px_minmax(0,1fr)]">
           <Surface className="h-fit p-6">
             <div className="flex items-center justify-between">
@@ -145,19 +166,36 @@ export default function HomeView({
 
           <div className="space-y-6">
             {filteredHomeProjects.length ? (
-              <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-                {filteredHomeProjects.map((project, index) => (
-                <ToolCard
-                  key={project.id}
-                  project={project}
-                  categories={getProjectCategories(project)}
-                  onOpenProject={openProject}
-                  onOpenCategoryPage={openCategoryPage}
-                />
-                ))}
-              </div>
+              <>
+                <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+                  {visibleHomeProjects.map((project) => (
+                    <ToolCard
+                      key={project.id}
+                      project={project}
+                      categories={getProjectCategories(project)}
+                      onOpenProject={openProject}
+                      onOpenCategoryPage={openCategoryPage}
+                    />
+                  ))}
+                </div>
+                {hasMoreHomeProjects ? (
+                  <div className="flex justify-center">
+                    <button
+                      className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-6 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-950"
+                      onClick={showMoreProjects}
+                      type="button"
+                    >
+                      Show more
+                    </button>
+                  </div>
+                ) : null}
+              </>
             ) : status === "ready" ? (
-              <EmptyState>No tools match this category filter.</EmptyState>
+              <EmptyState>
+                {searchQuery.trim()
+                  ? "No tools match your search."
+                  : "No tools match this category filter."}
+              </EmptyState>
             ) : null}
 
             {!projects.length && status === "ready" ? (

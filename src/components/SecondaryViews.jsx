@@ -2,6 +2,25 @@ import React from "react";
 import { ArrowUpRightIcon } from "./icons";
 import { EmptyState, SectionIntro, StatCard, Surface, ToolCard } from "./ui";
 
+function formatAuthorName(ownerEmail) {
+  if (!ownerEmail) {
+    return "Unknown author";
+  }
+
+  const localPart = ownerEmail.split("@")[0] || ownerEmail;
+
+  return localPart
+    .split(/[._-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function getAuthorInitial(ownerEmail) {
+  const authorName = formatAuthorName(ownerEmail);
+  return authorName.charAt(0).toUpperCase();
+}
+
 export function DashboardView({
   session,
   userName,
@@ -146,9 +165,15 @@ export function ProjectView({
 
           <div className="space-y-6">
             <Surface className="p-6">
-              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-sky-600">Project slug</p>
-              <p className="mt-3 text-lg font-semibold text-slate-950">{activeSlug}</p>
-              <p className="mt-2 text-sm leading-6 text-slate-500">Generated from the project title.</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-sky-600">Author</p>
+              <div className="mt-4 flex items-center gap-4">
+                <div className="flex h-16 w-16 items-center justify-center rounded-[22px] border border-slate-200 bg-[linear-gradient(135deg,_#0f172a_0%,_#0369a1_100%)] text-xl font-semibold text-white shadow-sm">
+                  {getAuthorInitial(activeProject.owner_email)}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-lg font-semibold text-slate-950">{formatAuthorName(activeProject.owner_email)}</p>
+                </div>
+              </div>
             </Surface>
             <Surface className="p-6">
               <p className="text-xs font-semibold uppercase tracking-[0.28em] text-sky-600">Visit project</p>

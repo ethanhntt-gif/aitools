@@ -13,6 +13,7 @@ const demoProjects = [
     slogan: "Prospecting and follow-ups on autopilot.",
     description: "Automates prospect research, drafts outreach, and tracks conversations.",
     category: "Automation",
+    owner_email: "alex@aitools.dev",
     project_url: "#",
     image_url:
       "https://images.unsplash.com/photo-1526379095098-d400fd0bf935?auto=format&fit=crop&w=900&q=80"
@@ -23,6 +24,7 @@ const demoProjects = [
     slogan: "From brief to launch-ready content in minutes.",
     description: "Turns briefs into social posts, blog outlines, and campaign assets in minutes.",
     category: "Content",
+    owner_email: "maya@aitools.dev",
     project_url: "#",
     image_url:
       "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=900&q=80"
@@ -33,6 +35,7 @@ const demoProjects = [
     slogan: "Faster replies, calmer queues, better support.",
     description: "Suggests support replies, summarizes tickets, and surfaces urgent issues.",
     category: "Customer Care",
+    owner_email: "ethan@aitools.dev",
     project_url: "#",
     image_url:
       "https://images.unsplash.com/photo-1552664730-d307ca884978?auto=format&fit=crop&w=900&q=80"
@@ -53,6 +56,7 @@ const initialForm = {
 const storageBucket = "project-assets";
 const totalModalSteps = 3;
 const maxCategories = 5;
+const initialVisibleProjectsCount = 21;
 
 const categoryOptions = [
   "Automation",
@@ -120,6 +124,8 @@ function App() {
   const [activeSlug, setActiveSlug] = useState("");
   const [activeCategorySlug, setActiveCategorySlug] = useState("");
   const [homeCategoryFilterSlug, setHomeCategoryFilterSlug] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [visibleProjectsCount, setVisibleProjectsCount] = useState(initialVisibleProjectsCount);
   const [modalStep, setModalStep] = useState(1);
   const [isCategoryMenuOpen, setIsCategoryMenuOpen] = useState(false);
   const [logoFile, setLogoFile] = useState(null);
@@ -141,7 +147,7 @@ function App() {
 
     const { data, error } = await supabase
       .from("projects")
-      .select("id, title, slogan, description, category, project_url, image_url, logo_url, owner_id")
+      .select("id, title, slogan, description, category, project_url, image_url, logo_url, owner_id, owner_email")
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -169,7 +175,7 @@ function App() {
 
     const { data, error } = await supabase
       .from("projects")
-      .select("id, title, slogan, description, category, project_url, image_url, logo_url, owner_id")
+      .select("id, title, slogan, description, category, project_url, image_url, logo_url, owner_id, owner_email")
       .eq("owner_id", activeSession.user.id)
       .order("created_at", { ascending: false });
 
@@ -269,6 +275,10 @@ function App() {
       window.removeEventListener("popstate", syncViewFromLocation);
     };
   }, []);
+
+  useEffect(() => {
+    setVisibleProjectsCount(initialVisibleProjectsCount);
+  }, [homeCategoryFilterSlug, searchQuery]);
 
   useEffect(() => {
     function handleDocumentClick(event) {
@@ -546,6 +556,14 @@ function App() {
     setIsMenuOpen(false);
   }
 
+  function handleSearchQueryChange(event) {
+    setSearchQuery(event.target.value);
+  }
+
+  function showMoreProjects() {
+    setVisibleProjectsCount((current) => current + initialVisibleProjectsCount);
+  }
+
   function handleDropZoneClick(fieldName) {
     if (fieldName === "logo_url") {
       logoInputRef.current?.click();
@@ -629,13 +647,24 @@ function App() {
   const categoryProjects = projects.filter((project) =>
     getCategoryList(project.category).some((categoryName) => getCategorySlug(categoryName) === activeCategorySlug)
   );
-  const filteredHomeProjects = homeCategoryFilterSlug
+  const categoryFilteredHomeProjects = homeCategoryFilterSlug
     ? projects.filter((project) =>
         getCategoryList(project.category).some(
           (categoryName) => getCategorySlug(categoryName) === homeCategoryFilterSlug
         )
       )
     : projects;
+  const normalizedSearchQuery = searchQuery.trim().toLowerCase();
+  const filteredHomeProjects = normalizedSearchQuery
+    ? categoryFilteredHomeProjects.filter((project) => {
+        const categoryText = getCategoryList(project.category).join(" ");
+        return [project.title, project.slogan, categoryText]
+          .filter(Boolean)
+          .some((value) => String(value).toLowerCase().includes(normalizedSearchQuery));
+      })
+    : categoryFilteredHomeProjects;
+  const visibleHomeProjects = filteredHomeProjects.slice(0, visibleProjectsCount);
+  const hasMoreHomeProjects = filteredHomeProjects.length > visibleHomeProjects.length;
   const categoryCounts = allCategoryNames.map((categoryName) => ({
     name: categoryName,
     slug: getCategorySlug(categoryName),
@@ -764,10 +793,15 @@ function App() {
               projects={projects}
               categoryCounts={categoryCounts}
               homeCategoryFilterSlug={homeCategoryFilterSlug}
+              searchQuery={searchQuery}
+              visibleHomeProjects={visibleHomeProjects}
+              hasMoreHomeProjects={hasMoreHomeProjects}
               openProject={openProject}
               openCategoryPage={openCategoryPage}
               toggleHomeCategoryFilter={toggleHomeCategoryFilter}
               setHomeCategoryFilterSlug={setHomeCategoryFilterSlug}
+              handleSearchQueryChange={handleSearchQueryChange}
+              showMoreProjects={showMoreProjects}
               scrollToSection={scrollToSection}
               openSubmitFlow={openSubmitFlow}
               getProjectCategories={getProjectCategories}
