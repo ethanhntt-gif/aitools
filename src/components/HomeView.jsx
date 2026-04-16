@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { ArrowUpRightIcon, ThumbUpIcon } from "./icons";
+import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
+import { ExternalSiteIcon, ThumbUpIcon } from "./icons";
 import { EmptyState, SectionIntro, Surface } from "./ui";
 
 function formatWeekHeadline(dateValue) {
@@ -46,34 +47,48 @@ function getTimeLeft(targetDateValue) {
   };
 }
 
-function ProjectPageIcon(props) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...props}>
-      <rect x="4" y="4" width="16" height="16" rx="3" />
-      <path d="M8 9h8" />
-      <path d="M8 12h8" />
-      <path d="M8 15h5" />
-    </svg>
-  );
-}
-
 function VoteButton({ project, handleVote, votingProjectId }) {
   const isVoting = votingProjectId === project.id;
 
   return (
-    <button
+    <motion.button
       className={`inline-flex min-w-[58px] flex-col items-center justify-center rounded-xl border px-3 py-3.5 text-sm font-semibold transition ${
         project.user_voted
           ? "border-slate-900 bg-slate-900 text-white dark:border-slate-100 dark:bg-slate-100 dark:text-slate-950"
           : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:text-slate-950 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-slate-600 dark:hover:text-slate-100"
       }`}
+      animate={{
+        scale: project.user_voted ? 1.03 : 1,
+        y: project.user_voted ? -1 : 0
+      }}
       disabled={isVoting}
       onClick={() => handleVote(project.id)}
       type="button"
+      transition={{ type: "spring", stiffness: 320, damping: 22 }}
+      whileHover={{ scale: project.user_voted ? 1.05 : 1.03, y: -2 }}
+      whileTap={{ scale: 0.94 }}
     >
-      <ThumbUpIcon className="h-5 w-5" />
-      <span className="mt-1 text-[14px] leading-none">{isVoting ? "..." : project.vote_count}</span>
-    </button>
+      <motion.span
+        animate={{ rotate: project.user_voted ? [-8, 8, -4, 0] : 0, scale: project.user_voted ? [1, 1.18, 1] : 1 }}
+        className="block"
+        transition={{ duration: 0.35 }}
+      >
+        <ThumbUpIcon className="h-5 w-5" />
+      </motion.span>
+      <span className="mt-1 min-h-[14px] text-[14px] leading-none">
+        <AnimatePresence mode="wait">
+          <motion.span
+            key={isVoting ? "loading" : project.vote_count}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -8, scale: 0.9 }}
+            initial={{ opacity: 0, y: 8, scale: 0.9 }}
+            transition={{ duration: 0.18 }}
+          >
+            {isVoting ? "..." : project.vote_count}
+          </motion.span>
+        </AnimatePresence>
+      </span>
+    </motion.button>
   );
 }
 
@@ -96,7 +111,11 @@ function WeeklyProjectRow({
   votingProjectId
 }) {
   return (
-    <div className="flex items-center gap-4 border-t border-slate-200 py-4 first:border-t-0 dark:border-slate-800">
+    <motion.div
+      layout
+      transition={{ layout: { type: "spring", stiffness: 320, damping: 28 } }}
+      className="group flex items-center gap-4 border-t border-slate-200 py-4 first:border-t-0 dark:border-slate-800"
+    >
       <div className="w-6 shrink-0 text-center text-sm font-medium text-slate-400 dark:text-slate-500">
         {index + 1}
       </div>
@@ -124,15 +143,7 @@ function WeeklyProjectRow({
           >
             {project.title}
           </button>
-          <div className="flex items-center gap-2">
-            <button
-              aria-label="Open project page"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition hover:border-slate-300 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400 dark:hover:border-slate-600 dark:hover:text-slate-100"
-              onClick={() => openProject(project)}
-              type="button"
-            >
-              <ProjectPageIcon className="h-4 w-4" />
-            </button>
+          <div className="flex items-center gap-2 opacity-0 pointer-events-none transition duration-200 group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto">
             <a
               aria-label="Visit client site"
               className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition hover:border-slate-300 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400 dark:hover:border-slate-600 dark:hover:text-slate-100"
@@ -140,7 +151,7 @@ function WeeklyProjectRow({
               rel="noreferrer"
               target="_blank"
             >
-              <ArrowUpRightIcon className="h-4 w-4" />
+              <ExternalSiteIcon className="h-4 w-4" />
             </a>
           </div>
         </div>
@@ -170,7 +181,7 @@ function WeeklyProjectRow({
           votingProjectId={votingProjectId}
         />
       </div>
-    </div>
+    </motion.div>
   );
 }
 
@@ -178,7 +189,6 @@ export default function HomeView({
   status,
   currentLaunchRange,
   thisWeekProjects,
-  featuredProjects,
   isVotingReady,
   votingProjectId,
   openProject,
@@ -251,66 +261,27 @@ export default function HomeView({
           <EmptyState>Loading launch week projects...</EmptyState>
         ) : thisWeekProjects.length ? (
           <Surface className="overflow-hidden px-5 py-2 shadow-[0_16px_40px_-34px_rgba(15,23,42,0.18)] sm:px-8">
-            {thisWeekProjects.map((project, index) => (
-              <WeeklyProjectRow
-                key={project.id}
-                index={index}
-                project={project}
-                categories={getProjectCategories(project)}
-                openProject={openProject}
-                openCategoryPage={openCategoryPage}
-                handleVote={handleVote}
-                votingProjectId={votingProjectId}
-              />
-            ))}
+            <LayoutGroup>
+              <AnimatePresence initial={false}>
+                {thisWeekProjects.map((project, index) => (
+                  <WeeklyProjectRow
+                    key={project.id}
+                    index={index}
+                    project={project}
+                    categories={getProjectCategories(project)}
+                    openProject={openProject}
+                    openCategoryPage={openCategoryPage}
+                    handleVote={handleVote}
+                    votingProjectId={votingProjectId}
+                  />
+                ))}
+              </AnimatePresence>
+            </LayoutGroup>
           </Surface>
         ) : (
           <EmptyState>
             No published launches are scheduled for this week yet. Add a new project and pick the current launch week.
           </EmptyState>
-        )}
-      </section>
-
-      <section className="space-y-6">
-        <SectionIntro
-          eyebrow="Also trending"
-          title="Popular across the full directory"
-          description={
-            isVotingReady
-              ? session
-                ? "Weekly voting is live, and these are the strongest projects across the broader directory too."
-                : "Sign in to vote, or browse the strongest projects across the broader directory."
-              : "Voting UI is ready, but the Supabase voting migration still needs to be applied."
-          }
-        />
-
-        {featuredProjects.length ? (
-          <div className="grid gap-4 md:grid-cols-3">
-            {featuredProjects.map((project) => (
-              <Surface className="p-5" key={`${project.id}-featured`}>
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <h3 className="truncate text-lg font-semibold tracking-tight text-slate-950 dark:text-slate-100">
-                      {project.title}
-                    </h3>
-                    <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">{project.vote_count} votes</p>
-                  </div>
-                  <button
-                    className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600 transition hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
-                    onClick={() => openProject(project)}
-                    type="button"
-                  >
-                    Open
-                  </button>
-                </div>
-                {project.slogan ? (
-                  <p className="mt-4 text-sm leading-6 text-slate-600 dark:text-slate-400">{project.slogan}</p>
-                ) : null}
-              </Surface>
-            ))}
-          </div>
-        ) : (
-          <EmptyState>No featured projects are available yet.</EmptyState>
         )}
       </section>
     </div>

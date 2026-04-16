@@ -95,6 +95,29 @@ export function ArrowUpRightIcon(props) {
   );
 }
 
+export function GlobeAltIcon(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" {...props}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M3 12h18" />
+      <path d="M12 3a14 14 0 0 1 0 18" />
+      <path d="M12 3a14 14 0 0 0 0 18" />
+      <path d="M5.6 7.5a18.6 18.6 0 0 0 12.8 0" />
+      <path d="M5.6 16.5a18.6 18.6 0 0 1 12.8 0" />
+    </svg>
+  );
+}
+
+export function ExternalSiteIcon(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" {...props}>
+      <path d="M14 5h5v5" />
+      <path d="M10 14 19 5" />
+      <path d="M19 13v4a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h4" />
+    </svg>
+  );
+}
+
 export function SearchIcon(props) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" {...props}>

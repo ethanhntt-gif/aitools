@@ -20,6 +20,7 @@ const initialForm = {
 const storageBucket = "project-assets";
 const totalModalSteps = 3;
 const maxCategories = 5;
+const launchWeekCapacity = 12;
 const initialVisibleProjectsCount = 21;
 const projectsCacheKey = "aitools.projects-cache.v1";
 const approvalToastCacheKey = "aitools.approval-toasts.v1";
@@ -56,6 +57,18 @@ function slugify(value) {
     .trim()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
+}
+
+function normalizeNumericId(value) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string" && /^\d+$/.test(value.trim())) {
+    return Number(value);
+  }
+
+  return value;
 }
 
 function getCategoryList(categoryValue) {
@@ -302,6 +315,7 @@ function normalizeProject(project) {
 
   return {
     ...project,
+    id: normalizeNumericId(project?.id),
     categories: relationalCategories,
     published: Boolean(project?.published),
     deleted: Boolean(project?.deleted),
@@ -314,7 +328,7 @@ function normalizeProject(project) {
 
 const demoProjects = [
   {
-    id: "demo-1",
+    id: 1,
     title: "AI Outreach Assistant",
     slogan: "Prospecting and follow-ups on autopilot.",
     description: "Automates prospect research, drafts outreach, and tracks conversations.",
@@ -329,7 +343,7 @@ const demoProjects = [
     vote_count: 24
   },
   {
-    id: "demo-2",
+    id: 2,
     title: "Content Studio",
     slogan: "From brief to launch-ready content in minutes.",
     description: "Turns briefs into social posts, blog outlines, and campaign assets in minutes.",
@@ -344,7 +358,7 @@ const demoProjects = [
     vote_count: 19
   },
   {
-    id: "demo-3",
+    id: 3,
     title: "Support Copilot",
     slogan: "Faster replies, calmer queues, better support.",
     description: "Suggests support replies, summarizes tickets, and surfaces urgent issues.",
@@ -547,7 +561,8 @@ function App() {
     }
 
     const nextVoteCounts = votes.reduce((result, vote) => {
-      result[vote.project_id] = (result[vote.project_id] || 0) + 1;
+      const normalizedProjectId = normalizeNumericId(vote.project_id);
+      result[normalizedProjectId] = (result[normalizedProjectId] || 0) + 1;
       return result;
     }, {});
 
@@ -576,7 +591,7 @@ function App() {
 
         console.error(userVotesError);
       } else {
-        nextVotedProjectIds = userVotes.map((vote) => vote.project_id);
+        nextVotedProjectIds = userVotes.map((vote) => normalizeNumericId(vote.project_id));
       }
     }
 
@@ -823,7 +838,7 @@ function App() {
 
       if (path.startsWith("/preview/")) {
         setActiveView("project");
-        setActivePreviewId(decodeURIComponent(path.replace("/preview/", "")));
+        setActivePreviewId(normalizeNumericId(decodeURIComponent(path.replace("/preview/", ""))));
         setActiveSlug("");
         setActiveCategorySlug("");
         setHomeCategoryFilterSlug("");
@@ -1525,13 +1540,32 @@ function App() {
   const userAvatar = session?.user?.user_metadata?.avatar_url;
   const launchYear = new Date().getFullYear();
   const upcomingLaunchSlots = getUpcomingLaunchSlots();
-  const occupiedLaunchWeeks = new Set(
-    [...projects, ...myProjects]
-      .filter((project) => !project?.deleted)
-      .filter((project) => project?.id !== editingProject?.id)
-      .map((project) => Number(project?.launch_week))
-      .filter((launchWeek) => Number.isInteger(launchWeek) && launchWeek > 0)
+  const uniqueProjectsForLaunchCapacity = Array.from(
+    new Map(
+      [...projects, ...myProjects]
+        .filter((project) => project?.id != null)
+        .map((project) => [project.id, project])
+    ).values()
   );
+  const launchWeekCounts = uniqueProjectsForLaunchCapacity
+    .filter((project) => !project?.deleted)
+    .filter((project) => project?.id !== editingProject?.id)
+    .map((project) => Number(project?.launch_week))
+    .filter((launchWeek) => Number.isInteger(launchWeek) && launchWeek > 0)
+    .reduce((result, launchWeek) => {
+      result[launchWeek] = (result[launchWeek] || 0) + 1;
+      return result;
+    }, {});
+  const getLaunchSlotMeta = (week) => {
+    const bookedCount = launchWeekCounts[week] || 0;
+
+    return {
+      bookedCount,
+      capacity: launchWeekCapacity,
+      remainingCount: Math.max(0, launchWeekCapacity - bookedCount),
+      isFull: bookedCount >= launchWeekCapacity
+    };
+  };
   const selectedLaunchWeek = Number(formData.launch_week);
   const launchSlotOptions =
     selectedLaunchWeek > 0 && !upcomingLaunchSlots.some((slot) => slot.week === selectedLaunchWeek)
@@ -1541,16 +1575,16 @@ function App() {
             dateValue: getLaunchDateValueFromWeek(selectedLaunchWeek, launchYear),
             dateLabel: formatLaunchSlotDate(getLaunchDateValueFromWeek(selectedLaunchWeek, launchYear)),
             ...getLaunchSlotRange(selectedLaunchWeek, launchYear),
-            isOccupied: occupiedLaunchWeeks.has(selectedLaunchWeek)
+            ...getLaunchSlotMeta(selectedLaunchWeek)
           },
           ...upcomingLaunchSlots.map((slot) => ({
             ...slot,
-            isOccupied: occupiedLaunchWeeks.has(slot.week)
+            ...getLaunchSlotMeta(slot.week)
           }))
         ]
       : upcomingLaunchSlots.map((slot) => ({
           ...slot,
-          isOccupied: occupiedLaunchWeeks.has(slot.week)
+          ...getLaunchSlotMeta(slot.week)
         }));
   const projectsWithVotes = projects.map((project) => ({
     ...project,
@@ -1613,11 +1647,6 @@ function App() {
     slug: getCategorySlug(categoryName),
     count: publicProjects.filter((project) => getProjectCategoryNames(project).includes(categoryName)).length
   }));
-  const featuredProjects = filteredHomeProjects
-    .slice()
-    .sort((left, right) => (right.vote_count || 0) - (left.vote_count || 0))
-    .slice(0, 3);
-
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(125,211,252,0.22),_transparent_35%),radial-gradient(circle_at_top_right,_rgba(226,232,240,0.65),_transparent_30%),linear-gradient(180deg,_#f8fbff_0%,_#f8fafc_40%,_#f1f5f9_100%)] text-slate-900 dark:bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.12),_transparent_30%),radial-gradient(circle_at_top_right,_rgba(30,41,59,0.65),_transparent_28%),linear-gradient(180deg,_#020617_0%,_#0f172a_38%,_#111827_100%)] dark:text-slate-100">
       <div className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 pb-10 pt-4 sm:px-6 lg:px-8">
@@ -1637,9 +1666,6 @@ function App() {
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
-                <button className="rounded-full px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-100" onClick={openHome} type="button">
-                  Weekly Launch
-                </button>
                 <button className="rounded-full px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-100" onClick={openProjectsPage} type="button">
                   All Projects
                 </button>
@@ -1672,16 +1698,13 @@ function App() {
                           <span className="hidden text-sm font-medium text-slate-700 dark:text-slate-300 sm:inline">{userName}</span>
                       </button>
                       {isMenuOpen ? (
-                        <Surface className="absolute right-0 top-[calc(100%+12px)] w-64 p-2">
+                        <Surface className="absolute right-0 top-[calc(100%+12px)] w-64 !bg-white !dark:bg-slate-950 !backdrop-blur-none p-2">
                           <div className="rounded-2xl px-3 py-3">
                             <p className="text-sm font-semibold text-slate-950 dark:text-slate-100">{userName}</p>
                             <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{session.user.email}</p>
                           </div>
                           <button className="w-full rounded-2xl px-3 py-2 text-left text-sm font-medium text-slate-700 transition hover:bg-slate-50 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-100" onClick={openModal} type="button">
                             Submit Tool
-                          </button>
-                          <button className="w-full rounded-2xl px-3 py-2 text-left text-sm font-medium text-slate-700 transition hover:bg-slate-50 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-100" onClick={openProjectsPage} type="button">
-                            All Projects
                           </button>
                           <button className="w-full rounded-2xl px-3 py-2 text-left text-sm font-medium text-slate-700 transition hover:bg-slate-50 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-100" onClick={openDashboard} type="button">
                             Dashboard
@@ -1775,7 +1798,6 @@ function App() {
               currentLaunchRange={currentLaunchRange}
               thisWeekProjects={thisWeekProjects}
               launchLeader={launchLeader}
-              featuredProjects={featuredProjects}
               isVotingReady={isVotingReady}
               votingProjectId={votingProjectId}
               openProject={openProject}

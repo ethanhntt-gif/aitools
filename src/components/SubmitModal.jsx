@@ -307,8 +307,9 @@ export default function SubmitModal({
                     <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
                       {visibleLaunchSlots.map((slot) => {
                         const isSelected = String(slot.week) === String(formData.launch_week);
-                        const isOccupied = Boolean(slot.isOccupied);
-                        const isDisabled = isOccupied && !isSelected;
+                        const isFull = Boolean(slot.isFull);
+                        const isDisabled = isFull && !isSelected;
+                        const isOverbooked = Number(slot.bookedCount) > Number(slot.capacity);
 
                         return (
                           <button
@@ -316,7 +317,7 @@ export default function SubmitModal({
                             className={`rounded-[18px] border px-3.5 py-3 text-left transition ${
                               isSelected
                                 ? "border-sky-300 bg-sky-50 text-sky-700 ring-2 ring-sky-100"
-                                : isOccupied
+                                : isFull
                                   ? "border-slate-200 bg-slate-100 text-slate-400 opacity-80"
                                   : "border-emerald-200 bg-emerald-50 text-emerald-800 hover:border-emerald-300 hover:bg-emerald-100"
                             }`}
@@ -328,7 +329,7 @@ export default function SubmitModal({
                               <div className={`text-[11px] font-semibold uppercase tracking-[0.18em] ${
                                 isSelected
                                   ? "text-sky-500"
-                                  : isOccupied
+                                  : isFull
                                     ? "text-slate-400"
                                     : "text-emerald-600"
                               }`}>
@@ -338,22 +339,35 @@ export default function SubmitModal({
                                 className={`rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] ${
                                   isSelected
                                     ? "bg-sky-100 text-sky-700"
-                                    : isOccupied
+                                    : isFull
                                       ? "bg-slate-200 text-slate-500"
                                       : "bg-emerald-100 text-emerald-700"
                                 }`}
                               >
-                                {isOccupied ? "Filled" : "Free"}
+                                {slot.bookedCount}/{slot.capacity}
                               </span>
                             </div>
                             <div className={`mt-2 text-sm font-semibold ${
                               isSelected
                                 ? "text-sky-700"
-                                : isOccupied
+                                : isFull
                                   ? "text-slate-500"
                                   : "text-emerald-900"
                             }`}>
                               {slot.startDateLabel} - {slot.endDateLabel}
+                            </div>
+                            <div className={`mt-2 text-xs ${
+                              isSelected
+                                ? "text-sky-600"
+                                : isFull
+                                  ? "text-slate-500"
+                                  : "text-emerald-700"
+                            }`}>
+                              {isOverbooked
+                                ? `${slot.bookedCount - slot.capacity} above capacity`
+                                : isFull
+                                  ? "No regular slots left"
+                                  : `${slot.remainingCount} spots left`}
                             </div>
                           </button>
                         );
@@ -372,7 +386,7 @@ export default function SubmitModal({
                     ) : null}
                   </div>
                   <p className="mt-3 text-sm leading-6 text-slate-500">
-                    Slots start from the upcoming available launch and continue through the rest of {launchYear}.
+                    Each week has {visibleLaunchSlots[0]?.capacity || 12} regular spots. The badge shows booked spots as x/12.
                   </p>
                   {launchWeekSummary ? (
                     <div className="mt-4 inline-flex items-center rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-slate-600">

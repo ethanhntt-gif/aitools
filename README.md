@@ -40,6 +40,7 @@ You can use the ready SQL schema in:
 
 - `supabase/projects.sql`
 - `supabase/storage.sql`
+- `supabase/migrate_projects_uuid_to_bigint.sql` if your existing `projects.id` is still `uuid`
 
 ## Google Auth setup
 
