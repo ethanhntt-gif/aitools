@@ -148,3 +148,12 @@ export function SunIcon(props) {
     </svg>
   );
 }
+
+export function ThumbUpIcon(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" {...props}>
+      <path d="M14 10V5.5A2.5 2.5 0 0011.5 3L8 10v11h8.2a2 2 0 001.9-1.4l1.5-5.2a2 2 0 00-1.9-2.6H14Z" />
+      <path d="M8 10H4.5A1.5 1.5 0 003 11.5v7A1.5 1.5 0 004.5 20H8" />
+    </svg>
+  );
+}

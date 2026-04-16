@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { ModalStep, Surface } from "./ui";
 
 export default function SubmitModal({
@@ -17,6 +17,8 @@ export default function SubmitModal({
   toggleCategoryMenu,
   selectCategory,
   handleInputChange,
+  launchSlotOptions,
+  launchYear,
   logoInputRef,
   screenshotInputRef,
   handleFileChange,
@@ -31,9 +33,29 @@ export default function SubmitModal({
     return null;
   }
 
+  const [showAllLaunchSlots, setShowAllLaunchSlots] = useState(false);
   const selectedCategoryNames = formData.category
     .map((categoryId) => categoryOptions.find((option) => option.id === categoryId)?.name)
     .filter(Boolean);
+  const launchWeekNumber = Number(formData.launch_week);
+  const visibleLaunchSlots = showAllLaunchSlots
+    ? launchSlotOptions
+    : launchSlotOptions.filter((slot, index) => index < 12 || String(slot.week) === String(formData.launch_week));
+  const hasHiddenLaunchSlots = launchSlotOptions.length > visibleLaunchSlots.length;
+  const launchWeekSummary = Number.isInteger(launchWeekNumber) && launchWeekNumber > 0
+    ? (() => {
+        const selectedSlot = launchSlotOptions.find((slot) => slot.week === launchWeekNumber);
+        const selectedDateLabel = selectedSlot?.dateLabel || "";
+
+        return `${launchYear} / Week ${launchWeekNumber}${selectedDateLabel ? ` / ${selectedDateLabel}` : ""}`;
+      })()
+    : "";
+
+  useEffect(() => {
+    if (!isOpen || modalStep !== 3) {
+      setShowAllLaunchSlots(false);
+    }
+  }, [isOpen, modalStep]);
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/55 px-4 py-10 backdrop-blur-sm" onClick={closeModal} role="presentation">
@@ -280,19 +302,93 @@ export default function SubmitModal({
 
               {modalStep === 3 ? (
                 <Surface className="p-6">
-                  <label className="space-y-2">
-                    <span className="text-sm font-semibold text-slate-700">Launch week</span>
-                    <input
-                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
-                      name="launch_week"
-                      value={formData.launch_week}
-                      onChange={handleInputChange}
-                      type="week"
-                    />
-                  </label>
+                  <div className="space-y-2">
+                    <span className="text-sm font-semibold text-slate-700">Upcoming launch slots</span>
+                    <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
+                      {visibleLaunchSlots.map((slot) => {
+                        const isSelected = String(slot.week) === String(formData.launch_week);
+                        const isOccupied = Boolean(slot.isOccupied);
+                        const isDisabled = isOccupied && !isSelected;
+
+                        return (
+                          <button
+                            key={`${slot.week}-${slot.dateValue}`}
+                            className={`rounded-[18px] border px-3.5 py-3 text-left transition ${
+                              isSelected
+                                ? "border-sky-300 bg-sky-50 text-sky-700 ring-2 ring-sky-100"
+                                : isOccupied
+                                  ? "border-slate-200 bg-slate-100 text-slate-400 opacity-80"
+                                  : "border-emerald-200 bg-emerald-50 text-emerald-800 hover:border-emerald-300 hover:bg-emerald-100"
+                            }`}
+                            disabled={isDisabled}
+                            onClick={() => handleInputChange({ target: { name: "launch_week", value: String(slot.week) } })}
+                            type="button"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className={`text-[11px] font-semibold uppercase tracking-[0.18em] ${
+                                isSelected
+                                  ? "text-sky-500"
+                                  : isOccupied
+                                    ? "text-slate-400"
+                                    : "text-emerald-600"
+                              }`}>
+                                Week {slot.week}
+                              </div>
+                              <span
+                                className={`rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] ${
+                                  isSelected
+                                    ? "bg-sky-100 text-sky-700"
+                                    : isOccupied
+                                      ? "bg-slate-200 text-slate-500"
+                                      : "bg-emerald-100 text-emerald-700"
+                                }`}
+                              >
+                                {isOccupied ? "Filled" : "Free"}
+                              </span>
+                            </div>
+                            <div className={`mt-2 text-sm font-semibold ${
+                              isSelected
+                                ? "text-sky-700"
+                                : isOccupied
+                                  ? "text-slate-500"
+                                  : "text-emerald-900"
+                            }`}>
+                              {slot.startDateLabel} - {slot.endDateLabel}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {hasHiddenLaunchSlots ? (
+                      <div className="pt-2">
+                        <button
+                          className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-950"
+                          onClick={() => setShowAllLaunchSlots(true)}
+                          type="button"
+                        >
+                          View all dates
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
                   <p className="mt-3 text-sm leading-6 text-slate-500">
-                    Choose the week when you plan to launch this product.
+                    Slots start from the upcoming available launch and continue through the rest of {launchYear}.
                   </p>
+                  {launchWeekSummary ? (
+                    <div className="mt-4 inline-flex items-center rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-slate-600">
+                      {launchWeekSummary}
+                    </div>
+                  ) : null}
+                  {!launchSlotOptions.length ? (
+                    <p className="mt-3 text-sm text-slate-500">
+                      No launch slots are available for the rest of this year yet.
+                    </p>
+                  ) : null}
+                  {formData.launch_week && (!Number.isInteger(launchWeekNumber) || launchWeekNumber < 1) ? (
+                    <p className="mt-3 text-sm text-rose-600">
+                      Please enter a positive week number.
+                    </p>
+                  ) : null}
                 </Surface>
               ) : null}
 

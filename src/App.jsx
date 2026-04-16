@@ -2,54 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { hasSupabaseCredentials, supabase } from "./lib/supabase";
 import HomeView from "./components/HomeView";
 import { MoonIcon, SparklesIcon, SunIcon } from "./components/icons";
-import { CategoryView, DashboardView, ProjectView } from "./components/SecondaryViews";
+import { CategoryView, DashboardView, ProjectView, ProjectsView } from "./components/SecondaryViews";
 import SubmitModal from "./components/SubmitModal";
 import { Surface, ToastStack } from "./components/ui";
-
-const demoProjects = [
-  {
-    id: "demo-1",
-    title: "AI Outreach Assistant",
-    slogan: "Prospecting and follow-ups on autopilot.",
-    description: "Automates prospect research, drafts outreach, and tracks conversations.",
-    category: "Automation",
-    owner_email: "alex@aitools.dev",
-    project_url: "#",
-    image_url:
-      "https://images.unsplash.com/photo-1526379095098-d400fd0bf935?auto=format&fit=crop&w=900&q=80"
-    ,
-    published: true,
-    created_at: "2026-04-01T10:00:00.000Z"
-  },
-  {
-    id: "demo-2",
-    title: "Content Studio",
-    slogan: "From brief to launch-ready content in minutes.",
-    description: "Turns briefs into social posts, blog outlines, and campaign assets in minutes.",
-    category: "Content",
-    owner_email: "maya@aitools.dev",
-    project_url: "#",
-    image_url:
-      "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=900&q=80"
-    ,
-    published: true,
-    created_at: "2026-04-03T10:00:00.000Z"
-  },
-  {
-    id: "demo-3",
-    title: "Support Copilot",
-    slogan: "Faster replies, calmer queues, better support.",
-    description: "Suggests support replies, summarizes tickets, and surfaces urgent issues.",
-    category: "Customer Care",
-    owner_email: "ethan@aitools.dev",
-    project_url: "#",
-    image_url:
-      "https://images.unsplash.com/photo-1552664730-d307ca884978?auto=format&fit=crop&w=900&q=80"
-    ,
-    published: true,
-    created_at: "2026-04-05T10:00:00.000Z"
-  }
-];
 
 const initialForm = {
   title: "",
@@ -69,6 +24,8 @@ const initialVisibleProjectsCount = 21;
 const projectsCacheKey = "aitools.projects-cache.v1";
 const approvalToastCacheKey = "aitools.approval-toasts.v1";
 const themePreferenceKey = "aitools.theme-preference.v1";
+const demoVotesCacheKey = "aitools.demo-votes.v1";
+const millisecondsInWeek = 7 * 24 * 60 * 60 * 1000;
 
 const defaultCategoryNames = [
   "Automation",
@@ -189,6 +146,148 @@ function isCategoryMigrationMissing(error) {
   );
 }
 
+function isLaunchScheduleMigrationMissing(error) {
+  const message = error?.message?.toLowerCase() || "";
+
+  return (
+    message.includes("launch_week")
+  );
+}
+
+function isVotingMigrationMissing(error) {
+  const message = error?.message?.toLowerCase() || "";
+
+  return message.includes("project_votes") || message.includes("vote");
+}
+
+function getFirstWednesdayOfYear(year) {
+  const januaryFirst = new Date(Date.UTC(year, 0, 1));
+  const dayOffset = (3 - januaryFirst.getUTCDay() + 7) % 7;
+  januaryFirst.setUTCDate(januaryFirst.getUTCDate() + dayOffset);
+  return januaryFirst;
+}
+
+function getLaunchWeekFromDate(baseDate = new Date()) {
+  const normalizedDate = new Date(Date.UTC(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate()));
+  const firstWednesday = getFirstWednesdayOfYear(normalizedDate.getUTCFullYear());
+
+  if (normalizedDate < firstWednesday) {
+    return 1;
+  }
+
+  return Math.floor((normalizedDate - firstWednesday) / millisecondsInWeek) + 1;
+}
+
+function formatDateValue(date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function getLaunchDateValueFromWeek(launchWeek, year = new Date().getFullYear()) {
+  const normalizedWeek = Number(launchWeek);
+
+  if (!normalizedWeek || normalizedWeek < 1) {
+    return "";
+  }
+
+  const normalizedYear = Number(year);
+  const firstWednesday = getFirstWednesdayOfYear(normalizedYear);
+  firstWednesday.setUTCDate(firstWednesday.getUTCDate() + (normalizedWeek - 1) * 7);
+  return formatDateValue(firstWednesday);
+}
+
+function formatLaunchSlotDate(dateValue) {
+  if (!dateValue) {
+    return "";
+  }
+
+  const parsedDate = new Date(`${dateValue}T00:00:00`);
+
+  if (Number.isNaN(parsedDate.getTime())) {
+    return "";
+  }
+
+  return parsedDate.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric"
+  });
+}
+
+function getLaunchSlotRange(launchWeek, year = new Date().getFullYear()) {
+  const startDateValue = getLaunchDateValueFromWeek(launchWeek, year);
+
+  if (!startDateValue) {
+    return {
+      startDateValue: "",
+      endDateValue: "",
+      startDateLabel: "",
+      endDateLabel: ""
+    };
+  }
+
+  const startDate = new Date(`${startDateValue}T00:00:00`);
+
+  if (Number.isNaN(startDate.getTime())) {
+    return {
+      startDateValue: "",
+      endDateValue: "",
+      startDateLabel: "",
+      endDateLabel: ""
+    };
+  }
+
+  const endDate = new Date(startDate);
+  endDate.setDate(endDate.getDate() + 6);
+
+  const endDateValue = formatDateValue(endDate);
+
+  return {
+    startDateValue,
+    endDateValue,
+    startDateLabel: formatLaunchSlotDate(startDateValue),
+    endDateLabel: formatLaunchSlotDate(endDateValue)
+  };
+}
+
+function getUpcomingLaunchSlots(baseDate = new Date()) {
+  const launchYear = baseDate.getFullYear();
+  const firstWednesday = getFirstWednesdayOfYear(launchYear);
+  const todayUtc = new Date(Date.UTC(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate()));
+  const firstUpcomingSlot = new Date(firstWednesday);
+
+  while (firstUpcomingSlot < todayUtc) {
+    firstUpcomingSlot.setUTCDate(firstUpcomingSlot.getUTCDate() + 7);
+  }
+
+  if (firstUpcomingSlot.getUTCFullYear() !== launchYear) {
+    return [];
+  }
+
+  const slots = [];
+  const currentSlot = new Date(firstUpcomingSlot);
+
+  while (currentSlot.getUTCFullYear() === launchYear) {
+    const weekNumber = Math.floor((currentSlot - firstWednesday) / millisecondsInWeek) + 1;
+    const { startDateValue, endDateValue, startDateLabel, endDateLabel } = getLaunchSlotRange(
+      weekNumber,
+      launchYear
+    );
+
+    slots.push({
+      week: weekNumber,
+      dateValue: formatDateValue(currentSlot),
+      dateLabel: formatLaunchSlotDate(formatDateValue(currentSlot)),
+      startDateValue,
+      endDateValue,
+      startDateLabel,
+      endDateLabel
+    });
+
+    currentSlot.setUTCDate(currentSlot.getUTCDate() + 7);
+  }
+
+  return slots;
+}
+
 function normalizeProject(project) {
   const relationalCategories = Array.isArray(project?.project_categories)
     ? project.project_categories
@@ -206,30 +305,68 @@ function normalizeProject(project) {
     categories: relationalCategories,
     published: Boolean(project?.published),
     deleted: Boolean(project?.deleted),
-    created_at: project?.created_at || null
+    created_at: project?.created_at || null,
+    launch_week: project?.launch_week ? Number(project.launch_week) : null,
+    launch_date: project?.launch_date || getLaunchDateValueFromWeek(project?.launch_week) || "",
+    vote_count: Number(project?.vote_count) || 0
   };
 }
 
-function getCurrentWeekValue() {
-  const currentDate = new Date();
-  const januaryFirst = new Date(Date.UTC(currentDate.getFullYear(), 0, 1));
-  const currentUtcDate = new Date(
-    Date.UTC(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate())
-  );
-  const dayOffset = januaryFirst.getUTCDay() || 7;
-  januaryFirst.setUTCDate(januaryFirst.getUTCDate() + 1 - dayOffset);
-
-  if (currentUtcDate < januaryFirst) {
-    return `${currentDate.getFullYear()}-01`;
+const demoProjects = [
+  {
+    id: "demo-1",
+    title: "AI Outreach Assistant",
+    slogan: "Prospecting and follow-ups on autopilot.",
+    description: "Automates prospect research, drafts outreach, and tracks conversations.",
+    category: "Automation",
+    owner_email: "alex@aitools.dev",
+    project_url: "#",
+    image_url:
+      "https://images.unsplash.com/photo-1526379095098-d400fd0bf935?auto=format&fit=crop&w=900&q=80",
+    published: true,
+    created_at: "2026-04-01T10:00:00.000Z",
+    launch_week: getLaunchWeekFromDate(new Date()),
+    vote_count: 24
+  },
+  {
+    id: "demo-2",
+    title: "Content Studio",
+    slogan: "From brief to launch-ready content in minutes.",
+    description: "Turns briefs into social posts, blog outlines, and campaign assets in minutes.",
+    category: "Content",
+    owner_email: "maya@aitools.dev",
+    project_url: "#",
+    image_url:
+      "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=900&q=80",
+    published: true,
+    created_at: "2026-04-03T10:00:00.000Z",
+    launch_week: getLaunchWeekFromDate(new Date()),
+    vote_count: 19
+  },
+  {
+    id: "demo-3",
+    title: "Support Copilot",
+    slogan: "Faster replies, calmer queues, better support.",
+    description: "Suggests support replies, summarizes tickets, and surfaces urgent issues.",
+    category: "Customer Care",
+    owner_email: "ethan@aitools.dev",
+    project_url: "#",
+    image_url:
+      "https://images.unsplash.com/photo-1552664730-d307ca884978?auto=format&fit=crop&w=900&q=80",
+    published: true,
+    created_at: "2026-04-05T10:00:00.000Z",
+    launch_week: Math.max(1, getLaunchWeekFromDate(new Date()) - 1),
+    vote_count: 8
   }
-
-  const weekNumber = Math.floor((currentUtcDate - januaryFirst) / 604800000) + 1;
-  return `${currentDate.getFullYear()}-W${String(weekNumber).padStart(2, "0")}`;
-}
+];
 
 function App() {
   const [projects, setProjects] = useState([]);
   const [myProjects, setMyProjects] = useState([]);
+  const [voteCounts, setVoteCounts] = useState({});
+  const [votedProjectIds, setVotedProjectIds] = useState([]);
+  const [votingProjectId, setVotingProjectId] = useState("");
+  const [isVotingReady, setIsVotingReady] = useState(true);
   const [categoryOptions, setCategoryOptions] = useState(createDefaultCategoryOptions);
   const [theme, setTheme] = useState(() => window.localStorage.getItem(themePreferenceKey) || "dark");
   const [status, setStatus] = useState("loading");
@@ -333,6 +470,121 @@ function App() {
     }
   }
 
+  function readDemoVotes() {
+    try {
+      const rawValue = window.localStorage.getItem(demoVotesCacheKey);
+      if (!rawValue) {
+        return {};
+      }
+
+      const parsedValue = JSON.parse(rawValue);
+      return parsedValue && typeof parsedValue === "object" ? parsedValue : {};
+    } catch (error) {
+      console.error("Could not read demo votes.", error);
+      return {};
+    }
+  }
+
+  function writeDemoVotes(nextValue) {
+    try {
+      window.localStorage.setItem(demoVotesCacheKey, JSON.stringify(nextValue));
+    } catch (error) {
+      console.error("Could not update demo votes.", error);
+    }
+  }
+
+  async function loadVotes(projectList, activeSession = session) {
+    const projectIds = projectList.map((project) => project.id).filter(Boolean);
+
+    if (!projectIds.length) {
+      setVoteCounts({});
+      setVotedProjectIds([]);
+      setIsVotingReady(true);
+      return;
+    }
+
+    if (!hasSupabaseCredentials || !supabase) {
+      const demoVotes = readDemoVotes();
+      const nextVoteCounts = projectList.reduce((result, project) => {
+        result[project.id] = Number(project.vote_count) || 0;
+        return result;
+      }, {});
+
+      const votedIds = Object.entries(demoVotes)
+        .filter(([, value]) => Boolean(value))
+        .map(([projectId]) => projectId);
+
+      votedIds.forEach((projectId) => {
+        if (typeof nextVoteCounts[projectId] === "number") {
+          nextVoteCounts[projectId] += 1;
+        }
+      });
+
+      setVoteCounts(nextVoteCounts);
+      setVotedProjectIds(votedIds);
+      setIsVotingReady(true);
+      return;
+    }
+
+    const { data: votes, error: votesError } = await supabase
+      .from("project_votes")
+      .select("project_id")
+      .in("project_id", projectIds);
+
+    if (votesError) {
+      if (isVotingMigrationMissing(votesError)) {
+        setVoteCounts(projectList.reduce((result, project) => {
+          result[project.id] = 0;
+          return result;
+        }, {}));
+        setVotedProjectIds([]);
+        setIsVotingReady(false);
+        return;
+      }
+
+      console.error(votesError);
+      return;
+    }
+
+    const nextVoteCounts = votes.reduce((result, vote) => {
+      result[vote.project_id] = (result[vote.project_id] || 0) + 1;
+      return result;
+    }, {});
+
+    projectIds.forEach((projectId) => {
+      if (typeof nextVoteCounts[projectId] !== "number") {
+        nextVoteCounts[projectId] = 0;
+      }
+    });
+
+    let nextVotedProjectIds = [];
+
+    if (activeSession?.user?.id) {
+      const { data: userVotes, error: userVotesError } = await supabase
+        .from("project_votes")
+        .select("project_id")
+        .eq("user_id", activeSession.user.id)
+        .in("project_id", projectIds);
+
+      if (userVotesError) {
+        if (isVotingMigrationMissing(userVotesError)) {
+          setVoteCounts(nextVoteCounts);
+          setVotedProjectIds([]);
+          setIsVotingReady(false);
+          return;
+        }
+
+        console.error(userVotesError);
+      } else {
+        nextVotedProjectIds = userVotes.map((vote) => vote.project_id);
+      }
+    }
+
+    setVoteCounts(nextVoteCounts);
+    setVotedProjectIds(nextVotedProjectIds);
+    setIsVotingReady(true);
+  }
+
   async function loadCategories() {
     if (!hasSupabaseCredentials || !supabase) {
       setCategoryOptions(createDefaultCategoryOptions());
@@ -392,7 +644,7 @@ function App() {
 
     let { data, error } = await supabase
       .from("projects")
-      .select("id, title, slogan, description, project_url, image_url, logo_url, owner_id, owner_email, created_at, published, deleted, project_categories(category:categories(id, name, slug))")
+      .select("id, title, slogan, description, project_url, image_url, logo_url, owner_id, owner_email, created_at, published, deleted, launch_week, launch_date, project_categories(category:categories(id, name, slug))")
       .eq("published", true)
       .eq("deleted", false)
       .order("created_at", { ascending: false });
@@ -402,7 +654,8 @@ function App() {
       (
         error.message?.toLowerCase().includes("published") ||
         error.message?.toLowerCase().includes("deleted") ||
-        isCategoryMigrationMissing(error)
+        isCategoryMigrationMissing(error) ||
+        isLaunchScheduleMigrationMissing(error)
       )
     ) {
       const fallbackResponse = await supabase
@@ -442,7 +695,7 @@ function App() {
 
     let { data, error } = await supabase
       .from("projects")
-      .select("id, title, slogan, description, project_url, image_url, logo_url, owner_id, owner_email, created_at, published, deleted, project_categories(category:categories(id, name, slug))")
+      .select("id, title, slogan, description, project_url, image_url, logo_url, owner_id, owner_email, created_at, published, deleted, launch_week, launch_date, project_categories(category:categories(id, name, slug))")
       .eq("owner_id", activeSession.user.id)
       .order("created_at", { ascending: false });
 
@@ -451,7 +704,8 @@ function App() {
       (
         error.message?.toLowerCase().includes("published") ||
         error.message?.toLowerCase().includes("deleted") ||
-        isCategoryMigrationMissing(error)
+        isCategoryMigrationMissing(error) ||
+        isLaunchScheduleMigrationMissing(error)
       )
     ) {
       const fallbackResponse = await supabase
@@ -529,11 +783,29 @@ function App() {
   }, [session]);
 
   useEffect(() => {
+    if (!projects.length) {
+      setVoteCounts({});
+      setVotedProjectIds([]);
+      return;
+    }
+
+    loadVotes(projects, session);
+  }, [projects, session]);
+
+  useEffect(() => {
     function syncViewFromLocation() {
       const path = window.location.pathname.replace(/\/+$/, "") || "/";
 
       if (path === "/dashboard") {
         setActiveView("dashboard");
+        setActiveSlug("");
+        setActiveCategorySlug("");
+        setHomeCategoryFilterSlug("");
+        return;
+      }
+
+      if (path === "/projects") {
+        setActiveView("projects");
         setActiveSlug("");
         setActiveCategorySlug("");
         setHomeCategoryFilterSlug("");
@@ -741,6 +1013,12 @@ function App() {
       return false;
     }
 
+    if (step === 3 && (!Number.isInteger(Number(formData.launch_week)) || Number(formData.launch_week) < 1)) {
+      setSubmitStatus("error");
+      setSubmitMessage("Launch week must be a positive number.");
+      return false;
+    }
+
     setSubmitStatus("idle");
     setSubmitMessage("");
     return true;
@@ -813,6 +1091,7 @@ function App() {
       project_url: formData.project_url.trim(),
       image_url: nextImageUrl,
       logo_url: nextLogoUrl,
+      launch_week: Number(formData.launch_week),
       owner_id: session.user.id,
       owner_email: session.user.email
     };
@@ -826,9 +1105,11 @@ function App() {
     if (error) {
       setSubmitStatus("error");
       setSubmitMessage(
-        editingProject
-          ? "Project update failed. Add Supabase RLS update policy for the owner."
-          : "Project submission failed. Check the `projects` table schema and Supabase RLS insert policy."
+        isLaunchScheduleMigrationMissing(error)
+          ? "Project save failed because the `launch_week` column is missing. Run the latest `supabase/projects.sql` migration."
+          : editingProject
+            ? "Project update failed. Add Supabase RLS update policy for the owner."
+            : "Project submission failed. Check the `projects` table schema and Supabase RLS insert policy."
       );
       console.error(error);
       return;
@@ -917,7 +1198,7 @@ function App() {
       project_url: project.project_url || "",
       image_url: project.image_url || "",
       logo_url: project.logo_url || "",
-      launch_week: getCurrentWeekValue()
+      launch_week: project.launch_week ? String(project.launch_week) : ""
     });
     setLogoFile(null);
     setScreenshotFile(null);
@@ -1020,6 +1301,15 @@ function App() {
     setHomeCategoryFilterSlug("");
   }
 
+  function openProjectsPage() {
+    window.history.pushState({}, "", "/projects");
+    setActiveView("projects");
+    setActiveSlug("");
+    setActiveCategorySlug("");
+    setHomeCategoryFilterSlug("");
+    setIsMenuOpen(false);
+  }
+
   function openHome() {
     window.history.pushState({}, "", "/");
     setActiveView("home");
@@ -1062,8 +1352,9 @@ function App() {
 
   function toggleHomeCategoryFilter(categoryName) {
     const categorySlug = getCategorySlug(categoryName);
-    window.history.pushState({}, "", "/");
-    setActiveView("home");
+    const nextView = activeView === "projects" ? "projects" : "home";
+    window.history.pushState({}, "", nextView === "projects" ? "/projects" : "/");
+    setActiveView(nextView);
     setActiveSlug("");
     setActiveCategorySlug("");
     setHomeCategoryFilterSlug((current) => (current === categorySlug ? "" : categorySlug));
@@ -1072,6 +1363,80 @@ function App() {
 
   function handleSearchQueryChange(event) {
     setSearchQuery(event.target.value);
+  }
+
+  async function handleVote(projectId) {
+    if (!projectId) {
+      return;
+    }
+
+    if (!hasSupabaseCredentials || !supabase) {
+      const demoVotes = readDemoVotes();
+      const hasVoted = Boolean(demoVotes[projectId]);
+      const nextDemoVotes = {
+        ...demoVotes,
+        [projectId]: !hasVoted
+      };
+
+      if (!nextDemoVotes[projectId]) {
+        delete nextDemoVotes[projectId];
+      }
+
+      writeDemoVotes(nextDemoVotes);
+      setVoteCounts((current) => ({
+        ...current,
+        [projectId]: Math.max(0, (current[projectId] || 0) + (hasVoted ? -1 : 1))
+      }));
+      setVotedProjectIds((current) =>
+        hasVoted ? current.filter((id) => id !== projectId) : [...new Set([...current, projectId])]
+      );
+      return;
+    }
+
+    if (!session) {
+      await handleGoogleSignIn();
+      return;
+    }
+
+    if (!isVotingReady) {
+      pushToast({
+        tone: "info",
+        title: "Voting unavailable",
+        description: "Run the latest Supabase SQL migration to enable project voting."
+      });
+      return;
+    }
+
+    const hasVoted = votedProjectIds.includes(projectId);
+    setVotingProjectId(projectId);
+
+    const voteQuery = hasVoted
+      ? supabase.from("project_votes").delete().eq("project_id", projectId).eq("user_id", session.user.id)
+      : supabase.from("project_votes").insert({ project_id: projectId, user_id: session.user.id });
+
+    const { error } = await voteQuery;
+
+    if (error) {
+      console.error(error);
+      pushToast({
+        tone: "info",
+        title: "Vote failed",
+        description: isVotingMigrationMissing(error)
+          ? "Apply the latest Supabase SQL migration to enable voting."
+          : "Could not update your vote right now."
+      });
+      setVotingProjectId("");
+      return;
+    }
+
+    setVoteCounts((current) => ({
+      ...current,
+      [projectId]: Math.max(0, (current[projectId] || 0) + (hasVoted ? -1 : 1))
+    }));
+    setVotedProjectIds((current) =>
+      hasVoted ? current.filter((id) => id !== projectId) : [...new Set([...current, projectId])]
+    );
+    setVotingProjectId("");
   }
 
   function handleDashboardSearchQueryChange(event) {
@@ -1158,12 +1523,67 @@ function App() {
     session?.user?.email ||
     "Signed in";
   const userAvatar = session?.user?.user_metadata?.avatar_url;
-  const publicProjects = projects.filter((project) => project.published);
+  const launchYear = new Date().getFullYear();
+  const upcomingLaunchSlots = getUpcomingLaunchSlots();
+  const occupiedLaunchWeeks = new Set(
+    [...projects, ...myProjects]
+      .filter((project) => !project?.deleted)
+      .filter((project) => project?.id !== editingProject?.id)
+      .map((project) => Number(project?.launch_week))
+      .filter((launchWeek) => Number.isInteger(launchWeek) && launchWeek > 0)
+  );
+  const selectedLaunchWeek = Number(formData.launch_week);
+  const launchSlotOptions =
+    selectedLaunchWeek > 0 && !upcomingLaunchSlots.some((slot) => slot.week === selectedLaunchWeek)
+      ? [
+          {
+            week: selectedLaunchWeek,
+            dateValue: getLaunchDateValueFromWeek(selectedLaunchWeek, launchYear),
+            dateLabel: formatLaunchSlotDate(getLaunchDateValueFromWeek(selectedLaunchWeek, launchYear)),
+            ...getLaunchSlotRange(selectedLaunchWeek, launchYear),
+            isOccupied: occupiedLaunchWeeks.has(selectedLaunchWeek)
+          },
+          ...upcomingLaunchSlots.map((slot) => ({
+            ...slot,
+            isOccupied: occupiedLaunchWeeks.has(slot.week)
+          }))
+        ]
+      : upcomingLaunchSlots.map((slot) => ({
+          ...slot,
+          isOccupied: occupiedLaunchWeeks.has(slot.week)
+        }));
+  const projectsWithVotes = projects.map((project) => ({
+    ...project,
+    vote_count: typeof voteCounts[project.id] === "number" ? voteCounts[project.id] : Number(project.vote_count) || 0,
+    user_voted: votedProjectIds.includes(project.id)
+  }));
+  const publicProjects = projectsWithVotes.filter((project) => project.published);
   const previewProject = myProjects.find((project) => project.id === activePreviewId);
   const activeProject = activePreviewId
     ? previewProject || null
     : publicProjects.find((project) => slugify(project.title) === activeSlug);
   const isPreviewProject = Boolean(activePreviewId);
+  const currentLaunchWeek = getLaunchWeekFromDate(new Date());
+  const currentLaunchRange = getLaunchSlotRange(currentLaunchWeek, launchYear);
+  const thisWeekProjects = publicProjects
+    .filter((project) => {
+      if (project.launch_date) {
+        return (
+          project.launch_date >= currentLaunchRange.startDateValue &&
+          project.launch_date <= currentLaunchRange.endDateValue
+        );
+      }
+
+      return Number(project.launch_week) === currentLaunchWeek;
+    })
+    .sort((left, right) => {
+      if ((right.vote_count || 0) !== (left.vote_count || 0)) {
+        return (right.vote_count || 0) - (left.vote_count || 0);
+      }
+
+      return new Date(right.created_at || 0).getTime() - new Date(left.created_at || 0).getTime();
+    });
+  const launchLeader = thisWeekProjects[0] || null;
   const allCategoryNames = Array.from(new Set(publicProjects.flatMap((project) => getProjectCategoryNames(project))));
   const activeCategoryName =
     allCategoryNames.find((categoryName) => getCategorySlug(categoryName) === activeCategorySlug) || "";
@@ -1193,10 +1613,10 @@ function App() {
     slug: getCategorySlug(categoryName),
     count: publicProjects.filter((project) => getProjectCategoryNames(project).includes(categoryName)).length
   }));
-  const trendingProjects = filteredHomeProjects.slice(0, 3);
-  const newlyAddedProjects = filteredHomeProjects.slice(3, 6).length
-    ? filteredHomeProjects.slice(3, 6)
-    : filteredHomeProjects.slice(0, 3);
+  const featuredProjects = filteredHomeProjects
+    .slice()
+    .sort((left, right) => (right.vote_count || 0) - (left.vote_count || 0))
+    .slice(0, 3);
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(125,211,252,0.22),_transparent_35%),radial-gradient(circle_at_top_right,_rgba(226,232,240,0.65),_transparent_30%),linear-gradient(180deg,_#f8fbff_0%,_#f8fafc_40%,_#f1f5f9_100%)] text-slate-900 dark:bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.12),_transparent_30%),radial-gradient(circle_at_top_right,_rgba(30,41,59,0.65),_transparent_28%),linear-gradient(180deg,_#020617_0%,_#0f172a_38%,_#111827_100%)] dark:text-slate-100">
@@ -1210,21 +1630,18 @@ function App() {
                     <SparklesIcon className="h-5 w-5" />
                   </div>
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.3em] text-sky-600 dark:text-sky-400">AI Tools</p>
-                    <p className="text-lg font-semibold tracking-tight text-slate-950 dark:text-slate-100">Listing Hub</p>
+                    <p className="text-xs font-semibold uppercase tracking-[0.3em] text-sky-600 dark:text-sky-400">AI Launches</p>
+                    <p className="text-lg font-semibold tracking-tight text-slate-950 dark:text-slate-100">Weekly Board</p>
                   </div>
                 </button>
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
                 <button className="rounded-full px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-100" onClick={openHome} type="button">
-                  Browse Tools
+                  Weekly Launch
                 </button>
-                <button className="rounded-full px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-100" onClick={() => scrollToSection("features")} type="button">
-                  Features
-                </button>
-                <button className="rounded-full px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-100" onClick={() => scrollToSection("footer")} type="button">
-                  Contact
+                <button className="rounded-full px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-100" onClick={openProjectsPage} type="button">
+                  All Projects
                 </button>
               </div>
 
@@ -1262,6 +1679,9 @@ function App() {
                           </div>
                           <button className="w-full rounded-2xl px-3 py-2 text-left text-sm font-medium text-slate-700 transition hover:bg-slate-50 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-100" onClick={openModal} type="button">
                             Submit Tool
+                          </button>
+                          <button className="w-full rounded-2xl px-3 py-2 text-left text-sm font-medium text-slate-700 transition hover:bg-slate-50 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-100" onClick={openProjectsPage} type="button">
+                            All Projects
                           </button>
                           <button className="w-full rounded-2xl px-3 py-2 text-left text-sm font-medium text-slate-700 transition hover:bg-slate-50 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-100" onClick={openDashboard} type="button">
                             Dashboard
@@ -1310,6 +1730,26 @@ function App() {
               openCategoryPage={openCategoryPage}
               getProjectCategories={getProjectCategories}
             />
+          ) : activeView === "projects" ? (
+            <ProjectsView
+              status={status}
+              filteredProjects={filteredHomeProjects}
+              projects={publicProjects}
+              categoryCounts={categoryCounts}
+              homeCategoryFilterSlug={homeCategoryFilterSlug}
+              searchQuery={searchQuery}
+              visibleProjects={visibleHomeProjects}
+              hasMoreProjects={hasMoreHomeProjects}
+              openHome={openHome}
+              openProject={openProject}
+              openCategoryPage={openCategoryPage}
+              toggleHomeCategoryFilter={toggleHomeCategoryFilter}
+              setHomeCategoryFilterSlug={setHomeCategoryFilterSlug}
+              handleSearchQueryChange={handleSearchQueryChange}
+              showMoreProjects={showMoreProjects}
+              openSubmitFlow={openSubmitFlow}
+              getProjectCategories={getProjectCategories}
+            />
           ) : activeView === "project" ? (
             <ProjectView
               activeProject={activeProject}
@@ -1331,24 +1771,21 @@ function App() {
           ) : (
             <HomeView
               status={status}
-              trendingProjects={trendingProjects}
-              newlyAddedProjects={newlyAddedProjects}
-              filteredHomeProjects={filteredHomeProjects}
-              projects={publicProjects}
-              categoryCounts={categoryCounts}
-              homeCategoryFilterSlug={homeCategoryFilterSlug}
-              searchQuery={searchQuery}
-              visibleHomeProjects={visibleHomeProjects}
-              hasMoreHomeProjects={hasMoreHomeProjects}
+              currentLaunchWeek={currentLaunchWeek}
+              currentLaunchRange={currentLaunchRange}
+              thisWeekProjects={thisWeekProjects}
+              launchLeader={launchLeader}
+              featuredProjects={featuredProjects}
+              isVotingReady={isVotingReady}
+              votingProjectId={votingProjectId}
               openProject={openProject}
+              openProjectsPage={openProjectsPage}
               openCategoryPage={openCategoryPage}
-              toggleHomeCategoryFilter={toggleHomeCategoryFilter}
-              setHomeCategoryFilterSlug={setHomeCategoryFilterSlug}
-              handleSearchQueryChange={handleSearchQueryChange}
-              showMoreProjects={showMoreProjects}
-              scrollToSection={scrollToSection}
               openSubmitFlow={openSubmitFlow}
               getProjectCategories={getProjectCategories}
+              handleVote={handleVote}
+              hasSupabaseCredentials={hasSupabaseCredentials}
+              session={session}
             />
           )}
         </main>
@@ -1364,7 +1801,7 @@ function App() {
               </div>
               <div className="flex flex-wrap gap-6 text-sm font-medium text-slate-500 dark:text-slate-400">
                 <button className="transition hover:text-slate-950 dark:hover:text-slate-100" onClick={openHome} type="button">Browse</button>
-                <button className="transition hover:text-slate-950 dark:hover:text-slate-100" onClick={() => scrollToSection("features")} type="button">Features</button>
+                <button className="transition hover:text-slate-950 dark:hover:text-slate-100" onClick={openProjectsPage} type="button">All Projects</button>
                 <button className="transition hover:text-slate-950 dark:hover:text-slate-100" onClick={openSubmitFlow} type="button">Submit</button>
               </div>
             </div>
@@ -1391,6 +1828,8 @@ function App() {
         toggleCategoryMenu={toggleCategoryMenu}
         selectCategory={selectCategory}
         handleInputChange={handleInputChange}
+        launchSlotOptions={launchSlotOptions}
+        launchYear={launchYear}
         logoInputRef={logoInputRef}
         screenshotInputRef={screenshotInputRef}
         handleFileChange={handleFileChange}

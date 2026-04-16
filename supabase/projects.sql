@@ -10,6 +10,7 @@ create table if not exists public.projects (
   owner_email text,
   logo_url text not null,
   image_url text not null,
+  launch_week integer,
   published boolean not null default false,
   deleted boolean not null default false,
   created_at timestamptz not null default timezone('utc', now())
@@ -27,6 +28,9 @@ add column if not exists deleted boolean not null default false;
 alter table public.projects
 add column if not exists category text;
 
+alter table public.projects
+add column if not exists launch_week integer;
+
 create table if not exists public.categories (
   id uuid primary key default gen_random_uuid(),
   name text not null unique,
@@ -39,6 +43,13 @@ create table if not exists public.project_categories (
   category_id uuid not null references public.categories(id) on delete cascade,
   created_at timestamptz not null default timezone('utc', now()),
   primary key (project_id, category_id)
+);
+
+create table if not exists public.project_votes (
+  project_id uuid not null references public.projects(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  created_at timestamptz not null default timezone('utc', now()),
+  primary key (project_id, user_id)
 );
 
 insert into public.categories (name, slug)
@@ -68,6 +79,7 @@ on conflict (slug) do nothing;
 alter table public.projects enable row level security;
 alter table public.categories enable row level security;
 alter table public.project_categories enable row level security;
+alter table public.project_votes enable row level security;
 
 create policy "Anyone can read projects"
 on public.projects
@@ -147,3 +159,29 @@ with check (
       and public.projects.owner_id = auth.uid()
   )
 );
+
+create policy "Anyone can read project votes"
+on public.project_votes
+for select
+to anon, authenticated
+using (
+  exists (
+    select 1
+    from public.projects
+    where public.projects.id = project_id
+      and public.projects.published = true
+      and public.projects.deleted = false
+  )
+);
+
+create policy "Authenticated users can insert own votes"
+on public.project_votes
+for insert
+to authenticated
+with check (auth.uid() = user_id);
+
+create policy "Authenticated users can delete own votes"
+on public.project_votes
+for delete
+to authenticated
+using (auth.uid() = user_id);

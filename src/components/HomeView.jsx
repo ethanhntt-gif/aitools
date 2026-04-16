@@ -1,310 +1,317 @@
-import React from "react";
-import {
-  BoltIcon,
-  CodeIcon,
-  CompassIcon,
-  ImageIcon,
-  MegaphoneIcon,
-  PenIcon,
-  RefreshIcon,
-  SearchIcon,
-  SparklesIcon,
-  VideoIcon
-} from "./icons";
-import {
-  CategoryCard,
-  EmptyState,
-  FeatureCard,
-  SectionIntro,
-  SkeletonToolCard,
-  StatCard,
-  StatusBadge,
-  Surface,
-  ToolCard
-} from "./ui";
+import React, { useEffect, useState } from "react";
+import { ArrowUpRightIcon, ThumbUpIcon } from "./icons";
+import { EmptyState, SectionIntro, Surface } from "./ui";
 
-const featureCards = [
-  {
-    title: "Curated Selection",
-    description: "Only the most useful AI tools",
-    icon: SparklesIcon
-  },
-  {
-    title: "Fast Discovery",
-    description: "Find tools quickly with categories",
-    icon: CompassIcon
-  },
-  {
-    title: "Always Updated",
-    description: "New tools added daily",
-    icon: RefreshIcon
+function formatWeekHeadline(dateValue) {
+  if (!dateValue) {
+    return "This launch week";
   }
-];
 
-const showcaseCategories = [
-  { title: "Writing & Content", icon: PenIcon },
-  { title: "Image Generation", icon: ImageIcon },
-  { title: "Video & Animation", icon: VideoIcon },
-  { title: "Coding & Dev Tools", icon: CodeIcon },
-  { title: "Marketing & SEO", icon: MegaphoneIcon },
-  { title: "Productivity", icon: BoltIcon }
-];
+  const parsedDate = new Date(`${dateValue}T00:00:00`);
+
+  if (Number.isNaN(parsedDate.getTime())) {
+    return "This launch week";
+  }
+
+  return `Week of ${parsedDate.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric"
+  })}`;
+}
+
+function formatCountdownPart(value) {
+  return String(Math.max(0, value)).padStart(2, "0");
+}
+
+function getTimeLeft(targetDateValue) {
+  if (!targetDateValue) {
+    return { days: "00", hours: "00", minutes: "00", seconds: "00" };
+  }
+
+  const targetDate = new Date(`${targetDateValue}T00:00:00`);
+  targetDate.setDate(targetDate.getDate() + 7);
+  const difference = Math.max(0, targetDate.getTime() - Date.now());
+  const totalSeconds = Math.floor(difference / 1000);
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  return {
+    days: formatCountdownPart(days),
+    hours: formatCountdownPart(hours),
+    minutes: formatCountdownPart(minutes),
+    seconds: formatCountdownPart(seconds)
+  };
+}
+
+function ProjectPageIcon(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...props}>
+      <rect x="4" y="4" width="16" height="16" rx="3" />
+      <path d="M8 9h8" />
+      <path d="M8 12h8" />
+      <path d="M8 15h5" />
+    </svg>
+  );
+}
+
+function VoteButton({ project, handleVote, votingProjectId }) {
+  const isVoting = votingProjectId === project.id;
+
+  return (
+    <button
+      className={`inline-flex min-w-[58px] flex-col items-center justify-center rounded-xl border px-3 py-3.5 text-sm font-semibold transition ${
+        project.user_voted
+          ? "border-slate-900 bg-slate-900 text-white dark:border-slate-100 dark:bg-slate-100 dark:text-slate-950"
+          : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:text-slate-950 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-slate-600 dark:hover:text-slate-100"
+      }`}
+      disabled={isVoting}
+      onClick={() => handleVote(project.id)}
+      type="button"
+    >
+      <ThumbUpIcon className="h-5 w-5" />
+      <span className="mt-1 text-[14px] leading-none">{isVoting ? "..." : project.vote_count}</span>
+    </button>
+  );
+}
+
+function CountdownCard({ value, label }) {
+  return (
+    <div className="min-w-[64px] rounded-2xl border border-slate-200 bg-white px-3 py-3 text-center dark:border-slate-800 dark:bg-slate-900">
+      <div className="text-2xl font-semibold tracking-tight text-slate-950 dark:text-slate-100">{value}</div>
+      <div className="mt-1 text-[10px] font-medium uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">{label}</div>
+    </div>
+  );
+}
+
+function WeeklyProjectRow({
+  index,
+  project,
+  categories,
+  openProject,
+  openCategoryPage,
+  handleVote,
+  votingProjectId
+}) {
+  return (
+    <div className="flex items-center gap-4 border-t border-slate-200 py-4 first:border-t-0 dark:border-slate-800">
+      <div className="w-6 shrink-0 text-center text-sm font-medium text-slate-400 dark:text-slate-500">
+        {index + 1}
+      </div>
+
+      <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-950">
+        {project.logo_url ? (
+          <img
+            className="h-14 w-14 rounded-lg object-contain"
+            src={project.logo_url}
+            alt={project.title}
+          />
+        ) : (
+          <span className="text-lg font-semibold text-slate-500 dark:text-slate-400">
+            {project.title.slice(0, 1).toUpperCase()}
+          </span>
+        )}
+      </div>
+
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <button
+            className="truncate text-left text-[20px] font-semibold tracking-tight text-slate-950 transition hover:text-slate-700 dark:text-slate-100 dark:hover:text-slate-300"
+            onClick={() => openProject(project)}
+            type="button"
+          >
+            {project.title}
+          </button>
+          <div className="flex items-center gap-2">
+            <button
+              aria-label="Open project page"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition hover:border-slate-300 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400 dark:hover:border-slate-600 dark:hover:text-slate-100"
+              onClick={() => openProject(project)}
+              type="button"
+            >
+              <ProjectPageIcon className="h-4 w-4" />
+            </button>
+            <a
+              aria-label="Visit client site"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition hover:border-slate-300 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400 dark:hover:border-slate-600 dark:hover:text-slate-100"
+              href={project.project_url || "#"}
+              rel="noreferrer"
+              target="_blank"
+            >
+              <ArrowUpRightIcon className="h-4 w-4" />
+            </a>
+          </div>
+        </div>
+
+        {project.slogan ? (
+          <p className="mt-0.5 truncate text-[11px] leading-4 text-slate-400 dark:text-slate-500">{project.slogan}</p>
+        ) : null}
+
+        <div className="mt-1.5 flex flex-wrap items-center gap-2">
+          {categories.slice(0, 2).map((categoryItem) => (
+            <button
+              className="rounded-full border border-slate-200 bg-white px-2.5 py-0.5 text-[11px] font-medium text-slate-600 transition hover:border-slate-300 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:text-slate-100"
+              key={`${project.id}-${categoryItem}`}
+              onClick={() => openCategoryPage(categoryItem)}
+              type="button"
+            >
+              {categoryItem}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="ml-auto shrink-0">
+        <VoteButton
+          project={project}
+          handleVote={handleVote}
+          votingProjectId={votingProjectId}
+        />
+      </div>
+    </div>
+  );
+}
 
 export default function HomeView({
   status,
-  trendingProjects,
-  newlyAddedProjects,
-  filteredHomeProjects,
-  visibleHomeProjects,
-  hasMoreHomeProjects,
-  projects,
-  categoryCounts,
-  homeCategoryFilterSlug,
-  searchQuery,
+  currentLaunchRange,
+  thisWeekProjects,
+  featuredProjects,
+  isVotingReady,
+  votingProjectId,
   openProject,
+  openProjectsPage,
   openCategoryPage,
-  toggleHomeCategoryFilter,
-  setHomeCategoryFilterSlug,
-  handleSearchQueryChange,
-  showMoreProjects,
-  scrollToSection,
   openSubmitFlow,
-  getProjectCategories
+  getProjectCategories,
+  handleVote,
+  session
 }) {
+  const [timeLeft, setTimeLeft] = useState(() => getTimeLeft(currentLaunchRange.startDateValue));
+
+  useEffect(() => {
+    setTimeLeft(getTimeLeft(currentLaunchRange.startDateValue));
+
+    const intervalId = window.setInterval(() => {
+      setTimeLeft(getTimeLeft(currentLaunchRange.startDateValue));
+    }, 1000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [currentLaunchRange.startDateValue]);
+
   return (
-    <div className="space-y-20">
+    <div className="space-y-14">
       <section className="space-y-8">
-        <div className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-medium text-sky-700 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-300">
-          <SparklesIcon className="h-4 w-4" />
-          Modern AI tools directory
+        <div className="flex flex-col gap-8 lg:flex-row lg:items-start lg:justify-between">
+          <div className="space-y-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
+              Products launching this week
+            </p>
+            <h1 className="text-4xl font-semibold tracking-tight text-slate-950 dark:text-slate-100 sm:text-5xl">
+              {formatWeekHeadline(currentLaunchRange.startDateValue)}
+            </h1>
+          </div>
+
+          <div className="space-y-3 text-right">
+            <p className="text-sm text-slate-500 dark:text-slate-400">Time until next launch</p>
+            <div className="flex flex-wrap justify-end gap-3">
+              <CountdownCard value={timeLeft.days} label="Days" />
+              <CountdownCard value={timeLeft.hours} label="Hours" />
+              <CountdownCard value={timeLeft.minutes} label="Mins" />
+              <CountdownCard value={timeLeft.seconds} label="Secs" />
+            </div>
+            <p className="text-sm text-slate-400 dark:text-slate-500">Updated live</p>
+          </div>
         </div>
-        <div className="space-y-5">
-          <h1 className="max-w-3xl text-5xl font-semibold tracking-tight text-slate-950 dark:text-slate-100 sm:text-6xl">
-            Discover the Best AI Tools in One Place
-          </h1>
-          <p className="max-w-2xl text-lg leading-8 text-slate-600 dark:text-slate-400">
-            Explore, compare, and find powerful AI tools for productivity, creativity, and business.
-          </p>
-        </div>
-        <div className="flex flex-col gap-3 sm:flex-row">
+
+        <div className="flex flex-wrap gap-3">
           <button
-            className="inline-flex items-center justify-center rounded-full bg-slate-950 px-6 py-3.5 text-sm font-semibold text-white transition duration-300 hover:bg-sky-600"
-            onClick={() => scrollToSection("tools")}
+            className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-950 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-100"
+            onClick={openProjectsPage}
             type="button"
           >
-            Browse Tools
+            All projects
           </button>
           <button
-            className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-6 py-3.5 text-sm font-semibold text-slate-700 transition duration-300 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-950 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-100"
+            className="inline-flex items-center justify-center rounded-full bg-slate-950 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-sky-600 dark:bg-sky-500 dark:hover:bg-sky-400"
             onClick={openSubmitFlow}
             type="button"
           >
-            Submit Tool
+            Submit project
           </button>
         </div>
       </section>
 
-      <section className="grid gap-4 sm:grid-cols-3">
-        <StatCard value="10,000+" label="AI Tools" />
-        <StatCard value="500+" label="Categories" />
-        <StatCard value="1M+" label="Users" />
-      </section>
-
-      <section className="space-y-8" id="tools">
-        <SectionIntro
-          eyebrow="Directory"
-          title="Browse all listed AI tools"
-          description="The underlying project listing and filtering remain intact, now presented with a cleaner, more product-oriented layout."
-          action={<StatusBadge status={status} />}
-        />
-
-        <Surface className="p-4 sm:p-5">
-          <label className="relative block">
-            <span className="sr-only">Search tools</span>
-            <SearchIcon className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
-            <input
-              className="w-full rounded-2xl border border-slate-200 bg-white py-3 pl-12 pr-4 text-sm text-slate-950 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:focus:ring-sky-500/20"
-              onChange={handleSearchQueryChange}
-              placeholder="Search by tool name, slogan, or category"
-              type="search"
-              value={searchQuery}
-            />
-          </label>
-        </Surface>
-
-        <div className="grid gap-6 xl:grid-cols-[280px_minmax(0,1fr)]">
-          <Surface className="h-fit p-6">
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-sky-600 dark:text-sky-400">Categories</p>
-              {homeCategoryFilterSlug ? (
-                <button
-                  className="text-sm font-semibold text-slate-500 transition hover:text-slate-950 dark:text-slate-400 dark:hover:text-slate-100"
-                  onClick={() => setHomeCategoryFilterSlug("")}
-                  type="button"
-                >
-                  Clear
-                </button>
-              ) : null}
-            </div>
-            <div className="mt-5 space-y-3">
-              {categoryCounts.map((categoryItem) => (
-                <button
-                  className={`flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-left text-sm transition ${
-                    categoryItem.slug === homeCategoryFilterSlug
-                      ? "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-300"
-                      : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-800"
-                  }`}
-                  key={categoryItem.slug}
-                  onClick={() => toggleHomeCategoryFilter(categoryItem.name)}
-                  type="button"
-                >
-                  <span>{categoryItem.name}</span>
-                  <strong>{categoryItem.count}</strong>
-                </button>
-              ))}
-            </div>
-          </Surface>
-
-          <div className="space-y-6">
-            {status === "loading" && !projects.length ? (
-              <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-                {Array.from({ length: 6 }).map((_, index) => (
-                  <SkeletonToolCard key={`skeleton-${index}`} />
-                ))}
-              </div>
-            ) : filteredHomeProjects.length ? (
-              <>
-                <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-                  {visibleHomeProjects.map((project) => (
-                    <ToolCard
-                      key={project.id}
-                      project={project}
-                      categories={getProjectCategories(project)}
-                      onOpenProject={openProject}
-                      onOpenCategoryPage={openCategoryPage}
-                    />
-                  ))}
-                </div>
-                {hasMoreHomeProjects ? (
-                  <div className="flex justify-center">
-                    <button
-                      className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-6 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-950 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-100"
-                      onClick={showMoreProjects}
-                      type="button"
-                    >
-                      Show more
-                    </button>
-                  </div>
-                ) : null}
-              </>
-            ) : status === "ready" ? (
-              <EmptyState>
-                {searchQuery.trim()
-                  ? "No tools match your search."
-                  : "No tools match this category filter."}
-              </EmptyState>
-            ) : null}
-
-            {!projects.length && status === "ready" ? (
-              <EmptyState>Add rows into your Supabase `projects` table to populate the listing.</EmptyState>
-            ) : null}
-          </div>
-        </div>
-      </section>
-
-      <section className="space-y-8" id="features">
-        <SectionIntro
-          eyebrow="Why this directory"
-          title="Built for fast discovery and clean browsing"
-          description="A minimal landing experience inspired by modern SaaS directories, with reusable blocks and plenty of breathing room."
-        />
-        <div className="grid gap-6 md:grid-cols-3">
-          {featureCards.map((item) => (
-            <FeatureCard key={item.title} icon={item.icon} title={item.title} description={item.description} />
-          ))}
-        </div>
-      </section>
-
-      <section className="space-y-8">
-        <SectionIntro
-          eyebrow="Popular categories"
-          title="Browse by workflow"
-          description="Explore the core use cases people care about most when evaluating new AI products."
-        />
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {showcaseCategories.map((category) => (
-            <CategoryCard key={category.title} icon={category.icon} title={category.title} />
-          ))}
-        </div>
-      </section>
-
-      <section className="space-y-8">
-        <SectionIntro
-          eyebrow="Trending tools"
-          title="Discover what people are exploring now"
-          description="A focused set of highlighted cards at the top of the directory."
-        />
-        {trendingProjects.length ? (
-          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-            {trendingProjects.map((project, index) => (
-              <ToolCard
+      <section className="space-y-6">
+        {status === "loading" && !thisWeekProjects.length ? (
+          <EmptyState>Loading launch week projects...</EmptyState>
+        ) : thisWeekProjects.length ? (
+          <Surface className="overflow-hidden px-5 py-2 shadow-[0_16px_40px_-34px_rgba(15,23,42,0.18)] sm:px-8">
+            {thisWeekProjects.map((project, index) => (
+              <WeeklyProjectRow
                 key={project.id}
+                index={index}
                 project={project}
                 categories={getProjectCategories(project)}
-                onOpenProject={openProject}
-                onOpenCategoryPage={openCategoryPage}
-                />
-              ))}
-          </div>
+                openProject={openProject}
+                openCategoryPage={openCategoryPage}
+                handleVote={handleVote}
+                votingProjectId={votingProjectId}
+              />
+            ))}
+          </Surface>
         ) : (
-          <EmptyState>No tools are available yet.</EmptyState>
+          <EmptyState>
+            No published launches are scheduled for this week yet. Add a new project and pick the current launch week.
+          </EmptyState>
         )}
       </section>
 
-      <section className="space-y-8">
+      <section className="space-y-6">
         <SectionIntro
-          eyebrow="Newly added"
-          title="Fresh additions to the directory"
-          description="The same tool card system reused for the latest entries."
+          eyebrow="Also trending"
+          title="Popular across the full directory"
+          description={
+            isVotingReady
+              ? session
+                ? "Weekly voting is live, and these are the strongest projects across the broader directory too."
+                : "Sign in to vote, or browse the strongest projects across the broader directory."
+              : "Voting UI is ready, but the Supabase voting migration still needs to be applied."
+          }
         />
-        {newlyAddedProjects.length ? (
-          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-            {newlyAddedProjects.map((project, index) => (
-              <ToolCard
-                key={`${project.id}-new`}
-                project={project}
-                categories={getProjectCategories(project)}
-                onOpenProject={openProject}
-                onOpenCategoryPage={openCategoryPage}
-                />
-              ))}
+
+        {featuredProjects.length ? (
+          <div className="grid gap-4 md:grid-cols-3">
+            {featuredProjects.map((project) => (
+              <Surface className="p-5" key={`${project.id}-featured`}>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <h3 className="truncate text-lg font-semibold tracking-tight text-slate-950 dark:text-slate-100">
+                      {project.title}
+                    </h3>
+                    <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">{project.vote_count} votes</p>
+                  </div>
+                  <button
+                    className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600 transition hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+                    onClick={() => openProject(project)}
+                    type="button"
+                  >
+                    Open
+                  </button>
+                </div>
+                {project.slogan ? (
+                  <p className="mt-4 text-sm leading-6 text-slate-600 dark:text-slate-400">{project.slogan}</p>
+                ) : null}
+              </Surface>
+            ))}
           </div>
         ) : (
-          <EmptyState>No newly added tools are available yet.</EmptyState>
+          <EmptyState>No featured projects are available yet.</EmptyState>
         )}
-      </section>
-
-      <section>
-        <Surface className="overflow-hidden">
-          <div className="grid gap-8 bg-[linear-gradient(135deg,_rgba(15,23,42,1)_0%,_rgba(15,23,42,0.95)_45%,_rgba(3,105,161,0.92)_100%)] px-6 py-10 text-white sm:px-8 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center lg:px-10">
-            <div className="space-y-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-sky-200">Submit your AI tool</p>
-              <h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">Submit Your AI Tool</h2>
-              <p className="max-w-2xl text-base leading-7 text-sky-50/90">
-                Get visibility and users by listing your product.
-              </p>
-            </div>
-            <div>
-              <button
-                className="inline-flex items-center justify-center rounded-full bg-white px-6 py-3.5 text-sm font-semibold text-slate-950 transition hover:bg-sky-50 dark:bg-slate-100 dark:hover:bg-white"
-                onClick={openSubmitFlow}
-                type="button"
-              >
-                Submit Tool
-              </button>
-            </div>
-          </div>
-        </Surface>
       </section>
     </div>
   );
