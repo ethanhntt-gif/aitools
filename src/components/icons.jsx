@@ -103,3 +103,48 @@ export function SearchIcon(props) {
     </svg>
   );
 }
+
+export function EyeIcon(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" {...props}>
+      <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
+
+export function TrashIcon(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" {...props}>
+      <path d="M4 7h16" />
+      <path d="M10 11v6" />
+      <path d="M14 11v6" />
+      <path d="M6 7l1 12a2 2 0 002 2h6a2 2 0 002-2l1-12" />
+      <path d="M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3" />
+    </svg>
+  );
+}
+
+export function MoonIcon(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" {...props}>
+      <path d="M20 15.5A8.5 8.5 0 118.5 4 7 7 0 0020 15.5z" />
+    </svg>
+  );
+}
+
+export function SunIcon(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" {...props}>
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2.5v2.5" />
+      <path d="M12 19v2.5" />
+      <path d="M4.9 4.9l1.8 1.8" />
+      <path d="M17.3 17.3l1.8 1.8" />
+      <path d="M2.5 12H5" />
+      <path d="M19 12h2.5" />
+      <path d="M4.9 19.1l1.8-1.8" />
+      <path d="M17.3 6.7l1.8-1.8" />
+    </svg>
+  );
+}

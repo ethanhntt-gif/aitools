@@ -8,6 +8,7 @@
   color: #0f172a;
   background-color: #f8fafc;
   font-family: "Inter", sans-serif;
+  color-scheme: dark;
 }
 
 html {
@@ -20,6 +21,11 @@ body {
   background: #f8fafc;
   color: #0f172a;
   font-family: "Inter", sans-serif;
+}
+
+html.dark body {
+  background: #020617;
+  color: #e2e8f0;
 }
 
 * {

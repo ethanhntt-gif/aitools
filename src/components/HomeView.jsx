@@ -16,6 +16,7 @@ import {
   EmptyState,
   FeatureCard,
   SectionIntro,
+  SkeletonToolCard,
   StatCard,
   StatusBadge,
   Surface,
@@ -73,15 +74,15 @@ export default function HomeView({
   return (
     <div className="space-y-20">
       <section className="space-y-8">
-        <div className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-medium text-sky-700">
+        <div className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-medium text-sky-700 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-300">
           <SparklesIcon className="h-4 w-4" />
           Modern AI tools directory
         </div>
         <div className="space-y-5">
-          <h1 className="max-w-3xl text-5xl font-semibold tracking-tight text-slate-950 sm:text-6xl">
+          <h1 className="max-w-3xl text-5xl font-semibold tracking-tight text-slate-950 dark:text-slate-100 sm:text-6xl">
             Discover the Best AI Tools in One Place
           </h1>
-          <p className="max-w-2xl text-lg leading-8 text-slate-600">
+          <p className="max-w-2xl text-lg leading-8 text-slate-600 dark:text-slate-400">
             Explore, compare, and find powerful AI tools for productivity, creativity, and business.
           </p>
         </div>
@@ -94,7 +95,7 @@ export default function HomeView({
             Browse Tools
           </button>
           <button
-            className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-6 py-3.5 text-sm font-semibold text-slate-700 transition duration-300 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-950"
+            className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-6 py-3.5 text-sm font-semibold text-slate-700 transition duration-300 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-950 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-100"
             onClick={openSubmitFlow}
             type="button"
           >
@@ -120,9 +121,9 @@ export default function HomeView({
         <Surface className="p-4 sm:p-5">
           <label className="relative block">
             <span className="sr-only">Search tools</span>
-            <SearchIcon className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+            <SearchIcon className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
             <input
-              className="w-full rounded-2xl border border-slate-200 bg-white py-3 pl-12 pr-4 text-sm text-slate-950 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
+              className="w-full rounded-2xl border border-slate-200 bg-white py-3 pl-12 pr-4 text-sm text-slate-950 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:focus:ring-sky-500/20"
               onChange={handleSearchQueryChange}
               placeholder="Search by tool name, slogan, or category"
               type="search"
@@ -134,10 +135,10 @@ export default function HomeView({
         <div className="grid gap-6 xl:grid-cols-[280px_minmax(0,1fr)]">
           <Surface className="h-fit p-6">
             <div className="flex items-center justify-between">
-              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-sky-600">Categories</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-sky-600 dark:text-sky-400">Categories</p>
               {homeCategoryFilterSlug ? (
                 <button
-                  className="text-sm font-semibold text-slate-500 transition hover:text-slate-950"
+                  className="text-sm font-semibold text-slate-500 transition hover:text-slate-950 dark:text-slate-400 dark:hover:text-slate-100"
                   onClick={() => setHomeCategoryFilterSlug("")}
                   type="button"
                 >
@@ -150,8 +151,8 @@ export default function HomeView({
                 <button
                   className={`flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-left text-sm transition ${
                     categoryItem.slug === homeCategoryFilterSlug
-                      ? "border-sky-200 bg-sky-50 text-sky-700"
-                      : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+                      ? "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-300"
+                      : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-800"
                   }`}
                   key={categoryItem.slug}
                   onClick={() => toggleHomeCategoryFilter(categoryItem.name)}
@@ -165,7 +166,13 @@ export default function HomeView({
           </Surface>
 
           <div className="space-y-6">
-            {filteredHomeProjects.length ? (
+            {status === "loading" && !projects.length ? (
+              <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+                {Array.from({ length: 6 }).map((_, index) => (
+                  <SkeletonToolCard key={`skeleton-${index}`} />
+                ))}
+              </div>
+            ) : filteredHomeProjects.length ? (
               <>
                 <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
                   {visibleHomeProjects.map((project) => (
@@ -181,7 +188,7 @@ export default function HomeView({
                 {hasMoreHomeProjects ? (
                   <div className="flex justify-center">
                     <button
-                      className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-6 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-950"
+                      className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-6 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-950 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-100"
                       onClick={showMoreProjects}
                       type="button"
                     >
@@ -289,7 +296,7 @@ export default function HomeView({
             </div>
             <div>
               <button
-                className="inline-flex items-center justify-center rounded-full bg-white px-6 py-3.5 text-sm font-semibold text-slate-950 transition hover:bg-sky-50"
+                className="inline-flex items-center justify-center rounded-full bg-white px-6 py-3.5 text-sm font-semibold text-slate-950 transition hover:bg-sky-50 dark:bg-slate-100 dark:hover:bg-white"
                 onClick={openSubmitFlow}
                 type="button"
               >

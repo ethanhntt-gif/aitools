@@ -5,28 +5,145 @@ create table if not exists public.projects (
   title text not null,
   slogan text,
   description text not null,
-  category text not null,
   project_url text not null,
   owner_id uuid not null,
   owner_email text,
   logo_url text not null,
   image_url text not null,
+  published boolean not null default false,
+  deleted boolean not null default false,
   created_at timestamptz not null default timezone('utc', now())
 );
 
 alter table public.projects
 add column if not exists slogan text;
 
+alter table public.projects
+add column if not exists published boolean not null default false;
+
+alter table public.projects
+add column if not exists deleted boolean not null default false;
+
+alter table public.projects
+add column if not exists category text;
+
+create table if not exists public.categories (
+  id uuid primary key default gen_random_uuid(),
+  name text not null unique,
+  slug text not null unique,
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.project_categories (
+  project_id uuid not null references public.projects(id) on delete cascade,
+  category_id uuid not null references public.categories(id) on delete cascade,
+  created_at timestamptz not null default timezone('utc', now()),
+  primary key (project_id, category_id)
+);
+
+insert into public.categories (name, slug)
+values
+  ('Automation', 'automation'),
+  ('AI Agents', 'ai-agents'),
+  ('Content', 'content'),
+  ('Marketing', 'marketing'),
+  ('Sales', 'sales'),
+  ('Customer Support', 'customer-support'),
+  ('Productivity', 'productivity'),
+  ('Analytics', 'analytics'),
+  ('Research', 'research'),
+  ('Coding', 'coding'),
+  ('Design', 'design'),
+  ('Education', 'education'),
+  ('Video', 'video'),
+  ('Audio', 'audio'),
+  ('Image Generation', 'image-generation'),
+  ('Data', 'data'),
+  ('Finance', 'finance'),
+  ('Healthcare', 'healthcare'),
+  ('Recruiting', 'recruiting'),
+  ('Other', 'other')
+on conflict (slug) do nothing;
+
 alter table public.projects enable row level security;
+alter table public.categories enable row level security;
+alter table public.project_categories enable row level security;
 
 create policy "Anyone can read projects"
 on public.projects
 for select
 to anon, authenticated
-using (true);
+using (deleted = false and published = true);
 
 create policy "Authenticated users can insert projects"
 on public.projects
 for insert
 to authenticated
-with check (true);
+with check (owner_id = auth.uid());
+
+create policy "Users can read own projects"
+on public.projects
+for select
+to authenticated
+using (owner_id = auth.uid());
+
+create policy "Users can update own projects"
+on public.projects
+for update
+to authenticated
+using (owner_id = auth.uid())
+with check (owner_id = auth.uid());
+
+create policy "Anyone can read categories"
+on public.categories
+for select
+to anon, authenticated
+using (true);
+
+create policy "Authenticated users can read own project categories"
+on public.project_categories
+for select
+to authenticated
+using (
+  exists (
+    select 1
+    from public.projects
+    where public.projects.id = project_id
+      and public.projects.owner_id = auth.uid()
+  )
+);
+
+create policy "Anon can read published project categories"
+on public.project_categories
+for select
+to anon
+using (
+  exists (
+    select 1
+    from public.projects
+    where public.projects.id = project_id
+      and public.projects.published = true
+      and public.projects.deleted = false
+  )
+);
+
+create policy "Users can manage own project categories"
+on public.project_categories
+for all
+to authenticated
+using (
+  exists (
+    select 1
+    from public.projects
+    where public.projects.id = project_id
+      and public.projects.owner_id = auth.uid()
+  )
+)
+with check (
+  exists (
+    select 1
+    from public.projects
+    where public.projects.id = project_id
+      and public.projects.owner_id = auth.uid()
+  )
+);

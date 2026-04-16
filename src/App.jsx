@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { hasSupabaseCredentials, supabase } from "./lib/supabase";
 import HomeView from "./components/HomeView";
-import { SparklesIcon } from "./components/icons";
+import { MoonIcon, SparklesIcon, SunIcon } from "./components/icons";
 import { CategoryView, DashboardView, ProjectView } from "./components/SecondaryViews";
 import SubmitModal from "./components/SubmitModal";
-import { Surface } from "./components/ui";
+import { Surface, ToastStack } from "./components/ui";
 
 const demoProjects = [
   {
@@ -17,6 +17,9 @@ const demoProjects = [
     project_url: "#",
     image_url:
       "https://images.unsplash.com/photo-1526379095098-d400fd0bf935?auto=format&fit=crop&w=900&q=80"
+    ,
+    published: true,
+    created_at: "2026-04-01T10:00:00.000Z"
   },
   {
     id: "demo-2",
@@ -28,6 +31,9 @@ const demoProjects = [
     project_url: "#",
     image_url:
       "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=900&q=80"
+    ,
+    published: true,
+    created_at: "2026-04-03T10:00:00.000Z"
   },
   {
     id: "demo-3",
@@ -39,6 +45,9 @@ const demoProjects = [
     project_url: "#",
     image_url:
       "https://images.unsplash.com/photo-1552664730-d307ca884978?auto=format&fit=crop&w=900&q=80"
+    ,
+    published: true,
+    created_at: "2026-04-05T10:00:00.000Z"
   }
 ];
 
@@ -57,8 +66,11 @@ const storageBucket = "project-assets";
 const totalModalSteps = 3;
 const maxCategories = 5;
 const initialVisibleProjectsCount = 21;
+const projectsCacheKey = "aitools.projects-cache.v1";
+const approvalToastCacheKey = "aitools.approval-toasts.v1";
+const themePreferenceKey = "aitools.theme-preference.v1";
 
-const categoryOptions = [
+const defaultCategoryNames = [
   "Automation",
   "AI Agents",
   "Content",
@@ -91,7 +103,23 @@ function slugify(value) {
 
 function getCategoryList(categoryValue) {
   if (Array.isArray(categoryValue)) {
-    return categoryValue.filter(Boolean);
+    return categoryValue
+      .map((item) => {
+        if (!item) {
+          return "";
+        }
+
+        if (typeof item === "string") {
+          return item;
+        }
+
+        if (typeof item === "object" && item.name) {
+          return item.name;
+        }
+
+        return "";
+      })
+      .filter(Boolean);
   }
 
   if (!categoryValue) {
@@ -108,9 +136,102 @@ function getCategorySlug(categoryValue) {
   return slugify(categoryValue);
 }
 
+function createDefaultCategoryOptions() {
+  return defaultCategoryNames.map((name) => ({
+    id: `default-${slugify(name)}`,
+    name,
+    slug: slugify(name)
+  }));
+}
+
+function getSelectedCategoryNames(categoryIds, availableCategories) {
+  const categoryMap = new Map(availableCategories.map((category) => [category.id, category.name]));
+
+  return categoryIds
+    .map((categoryId) => categoryMap.get(categoryId))
+    .filter(Boolean);
+}
+
+function getProjectCategoryIds(project) {
+  if (Array.isArray(project?.categories) && project.categories.length) {
+    return project.categories.map((category) => category.id).filter(Boolean);
+  }
+
+  return [];
+}
+
+function getProjectCategoryNames(project) {
+  if (Array.isArray(project?.categories) && project.categories.length) {
+    return project.categories.map((category) => category.name).filter(Boolean);
+  }
+
+  return getCategoryList(project?.category);
+}
+
+function mapCategoryNamesToIds(categoryNames, availableCategories) {
+  const categoryMap = new Map(
+    availableCategories.map((category) => [category.name.toLowerCase(), category.id])
+  );
+
+  return categoryNames
+    .map((categoryName) => categoryMap.get(String(categoryName).toLowerCase()))
+    .filter(Boolean);
+}
+
+function isCategoryMigrationMissing(error) {
+  const message = error?.message?.toLowerCase() || "";
+
+  return (
+    message.includes("project_categories") ||
+    message.includes("categories") ||
+    message.includes("relationship") ||
+    message.includes("schema cache")
+  );
+}
+
+function normalizeProject(project) {
+  const relationalCategories = Array.isArray(project?.project_categories)
+    ? project.project_categories
+        .map((entry) => entry?.category ?? entry?.categories ?? entry)
+        .filter((category) => category?.id && category?.name)
+        .map((category) => ({
+          id: category.id,
+          name: category.name,
+          slug: category.slug || slugify(category.name)
+        }))
+    : [];
+
+  return {
+    ...project,
+    categories: relationalCategories,
+    published: Boolean(project?.published),
+    deleted: Boolean(project?.deleted),
+    created_at: project?.created_at || null
+  };
+}
+
+function getCurrentWeekValue() {
+  const currentDate = new Date();
+  const januaryFirst = new Date(Date.UTC(currentDate.getFullYear(), 0, 1));
+  const currentUtcDate = new Date(
+    Date.UTC(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate())
+  );
+  const dayOffset = januaryFirst.getUTCDay() || 7;
+  januaryFirst.setUTCDate(januaryFirst.getUTCDate() + 1 - dayOffset);
+
+  if (currentUtcDate < januaryFirst) {
+    return `${currentDate.getFullYear()}-01`;
+  }
+
+  const weekNumber = Math.floor((currentUtcDate - januaryFirst) / 604800000) + 1;
+  return `${currentDate.getFullYear()}-W${String(weekNumber).padStart(2, "0")}`;
+}
+
 function App() {
   const [projects, setProjects] = useState([]);
   const [myProjects, setMyProjects] = useState([]);
+  const [categoryOptions, setCategoryOptions] = useState(createDefaultCategoryOptions);
+  const [theme, setTheme] = useState(() => window.localStorage.getItem(themePreferenceKey) || "dark");
   const [status, setStatus] = useState("loading");
   const [message, setMessage] = useState("");
   const [session, setSession] = useState(null);
@@ -118,13 +239,19 @@ function App() {
   const [formData, setFormData] = useState(initialForm);
   const [submitStatus, setSubmitStatus] = useState("idle");
   const [submitMessage, setSubmitMessage] = useState("");
+  const [toasts, setToasts] = useState([]);
+  const [editingProject, setEditingProject] = useState(null);
+  const [deletingProjectId, setDeletingProjectId] = useState("");
+  const [restoringProjectId, setRestoringProjectId] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [activeView, setActiveView] = useState("home");
   const [activeSlug, setActiveSlug] = useState("");
+  const [activePreviewId, setActivePreviewId] = useState("");
   const [activeCategorySlug, setActiveCategorySlug] = useState("");
   const [homeCategoryFilterSlug, setHomeCategoryFilterSlug] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [dashboardSearchQuery, setDashboardSearchQuery] = useState("");
   const [visibleProjectsCount, setVisibleProjectsCount] = useState(initialVisibleProjectsCount);
   const [modalStep, setModalStep] = useState(1);
   const [isCategoryMenuOpen, setIsCategoryMenuOpen] = useState(false);
@@ -133,6 +260,109 @@ function App() {
   const logoInputRef = useRef(null);
   const screenshotInputRef = useRef(null);
   const categoryMenuRef = useRef(null);
+  const hasLoadedCachedProjectsRef = useRef(false);
+  const previousMyProjectsRef = useRef([]);
+
+  function pushToast(toast) {
+    const toastId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+    setToasts((current) => [
+      ...current,
+      {
+        id: toastId,
+        ...toast
+      }
+    ]);
+
+    window.setTimeout(() => {
+      setToasts((current) => current.filter((item) => item.id !== toastId));
+    }, 5000);
+  }
+
+  function dismissToast(toastId) {
+    setToasts((current) => current.filter((toast) => toast.id !== toastId));
+  }
+
+  function toggleTheme() {
+    setTheme((current) => (current === "dark" ? "light" : "dark"));
+  }
+
+  function readApprovalToastCache() {
+    try {
+      const rawValue = window.localStorage.getItem(approvalToastCacheKey);
+      if (!rawValue) {
+        return {};
+      }
+
+      const parsedValue = JSON.parse(rawValue);
+      return parsedValue && typeof parsedValue === "object" ? parsedValue : {};
+    } catch (error) {
+      console.error("Could not read approval notification cache.", error);
+      return {};
+    }
+  }
+
+  function writeApprovalToastCache(nextValue) {
+    try {
+      window.localStorage.setItem(approvalToastCacheKey, JSON.stringify(nextValue));
+    } catch (error) {
+      console.error("Could not update approval notification cache.", error);
+    }
+  }
+
+  function readCachedProjects() {
+    try {
+      const rawValue = window.localStorage.getItem(projectsCacheKey);
+      if (!rawValue) {
+        return [];
+      }
+
+      const parsedValue = JSON.parse(rawValue);
+      return Array.isArray(parsedValue) ? parsedValue : [];
+    } catch (error) {
+      console.error("Could not read cached projects.", error);
+      return [];
+    }
+  }
+
+  function writeCachedProjects(nextProjects) {
+    try {
+      window.localStorage.setItem(projectsCacheKey, JSON.stringify(nextProjects));
+    } catch (error) {
+      console.error("Could not cache projects.", error);
+    }
+  }
+
+  async function loadCategories() {
+    if (!hasSupabaseCredentials || !supabase) {
+      setCategoryOptions(createDefaultCategoryOptions());
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("categories")
+      .select("id, name, slug")
+      .order("name", { ascending: true });
+
+    if (error) {
+      console.error("Could not load categories.", error);
+      setCategoryOptions(createDefaultCategoryOptions());
+      return;
+    }
+
+    if (!data?.length) {
+      setCategoryOptions(createDefaultCategoryOptions());
+      return;
+    }
+
+    setCategoryOptions(
+      data.map((category) => ({
+        id: category.id,
+        name: category.name,
+        slug: category.slug || slugify(category.name)
+      }))
+    );
+  }
 
   async function loadProjects() {
     if (!hasSupabaseCredentials || !supabase) {
@@ -142,13 +372,48 @@ function App() {
       return;
     }
 
-    setStatus("loading");
-    setMessage("");
+    if (!hasLoadedCachedProjectsRef.current) {
+      const cachedProjects = readCachedProjects();
 
-    const { data, error } = await supabase
+      if (cachedProjects.length) {
+        setProjects(cachedProjects);
+        setStatus("ready");
+        setMessage("Showing cached project cards while fresh data loads.");
+      } else {
+        setStatus("loading");
+        setMessage("");
+      }
+
+      hasLoadedCachedProjectsRef.current = true;
+    } else if (!projects.length) {
+      setStatus("loading");
+      setMessage("");
+    }
+
+    let { data, error } = await supabase
       .from("projects")
-      .select("id, title, slogan, description, category, project_url, image_url, logo_url, owner_id, owner_email")
+      .select("id, title, slogan, description, project_url, image_url, logo_url, owner_id, owner_email, created_at, published, deleted, project_categories(category:categories(id, name, slug))")
+      .eq("published", true)
+      .eq("deleted", false)
       .order("created_at", { ascending: false });
+
+    if (
+      error &&
+      (
+        error.message?.toLowerCase().includes("published") ||
+        error.message?.toLowerCase().includes("deleted") ||
+        isCategoryMigrationMissing(error)
+      )
+    ) {
+      const fallbackResponse = await supabase
+        .from("projects")
+        .select("id, title, slogan, description, project_url, image_url, logo_url, owner_id, owner_email, created_at")
+        .order("created_at", { ascending: false });
+
+      data =
+        fallbackResponse.data?.map((project) => ({ ...project, published: true, deleted: false })) ?? [];
+      error = fallbackResponse.error;
+    }
 
     if (error) {
       setProjects(demoProjects);
@@ -158,7 +423,9 @@ function App() {
       return;
     }
 
-    setProjects(data ?? []);
+    const normalizedProjects = (data ?? []).map(normalizeProject);
+    setProjects(normalizedProjects);
+    writeCachedProjects(normalizedProjects);
     setStatus("ready");
     setMessage(
       data?.length
@@ -173,11 +440,30 @@ function App() {
       return;
     }
 
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from("projects")
-      .select("id, title, slogan, description, category, project_url, image_url, logo_url, owner_id, owner_email")
+      .select("id, title, slogan, description, project_url, image_url, logo_url, owner_id, owner_email, created_at, published, deleted, project_categories(category:categories(id, name, slug))")
       .eq("owner_id", activeSession.user.id)
       .order("created_at", { ascending: false });
+
+    if (
+      error &&
+      (
+        error.message?.toLowerCase().includes("published") ||
+        error.message?.toLowerCase().includes("deleted") ||
+        isCategoryMigrationMissing(error)
+      )
+    ) {
+      const fallbackResponse = await supabase
+        .from("projects")
+        .select("id, title, slogan, description, project_url, image_url, logo_url, owner_id, owner_email, created_at")
+        .eq("owner_id", activeSession.user.id)
+        .order("created_at", { ascending: false });
+
+      data =
+        fallbackResponse.data?.map((project) => ({ ...project, published: false, deleted: false })) ?? [];
+      error = fallbackResponse.error;
+    }
 
     if (error) {
       console.error(error);
@@ -185,8 +471,14 @@ function App() {
       return;
     }
 
-    setMyProjects(data ?? []);
+    setMyProjects((data ?? []).map(normalizeProject));
   }
+
+  useEffect(() => {
+    const rootElement = document.documentElement;
+    rootElement.classList.toggle("dark", theme === "dark");
+    window.localStorage.setItem(themePreferenceKey, theme);
+  }, [theme]);
 
   useEffect(() => {
     let ignore = false;
@@ -231,6 +523,7 @@ function App() {
   }, []);
 
   useEffect(() => {
+    loadCategories();
     loadProjects();
     loadMyProjects(session);
   }, [session]);
@@ -250,6 +543,16 @@ function App() {
       if (path.startsWith("/project/")) {
         setActiveView("project");
         setActiveSlug(decodeURIComponent(path.replace("/project/", "")));
+        setActivePreviewId("");
+        setActiveCategorySlug("");
+        setHomeCategoryFilterSlug("");
+        return;
+      }
+
+      if (path.startsWith("/preview/")) {
+        setActiveView("project");
+        setActivePreviewId(decodeURIComponent(path.replace("/preview/", "")));
+        setActiveSlug("");
         setActiveCategorySlug("");
         setHomeCategoryFilterSlug("");
         return;
@@ -265,6 +568,7 @@ function App() {
 
       setActiveView("home");
       setActiveSlug("");
+      setActivePreviewId("");
       setActiveCategorySlug("");
     }
 
@@ -301,6 +605,41 @@ function App() {
       document.removeEventListener("keydown", handleEscape);
     };
   }, []);
+
+  useEffect(() => {
+    if (!session?.user?.id || !myProjects.length) {
+      previousMyProjectsRef.current = myProjects;
+      return;
+    }
+
+    const previousMap = new Map(
+      previousMyProjectsRef.current.map((project) => [project.id, Boolean(project.published)])
+    );
+    const approvalToastCache = readApprovalToastCache();
+    let hasCacheUpdate = false;
+
+    myProjects.forEach((project) => {
+      const wasPublished = previousMap.get(project.id);
+      const isPublished = Boolean(project.published);
+      const cacheKey = `${session.user.id}:${project.id}`;
+
+      if (wasPublished === false && isPublished && !approvalToastCache[cacheKey]) {
+        pushToast({
+          tone: "success",
+          title: "Listing approved",
+          description: "Your listing has been approved and published."
+        });
+        approvalToastCache[cacheKey] = true;
+        hasCacheUpdate = true;
+      }
+    });
+
+    if (hasCacheUpdate) {
+      writeApprovalToastCache(approvalToastCache);
+    }
+
+    previousMyProjectsRef.current = myProjects;
+  }, [myProjects, session]);
 
   async function handleGoogleSignIn() {
     if (!supabase) {
@@ -355,10 +694,10 @@ function App() {
     setSubmitStatus("idle");
     setSubmitMessage("");
     setFormData((current) => {
-      if (current.category.includes(categoryOption)) {
+      if (current.category.includes(categoryOption.id)) {
         return {
           ...current,
-          category: current.category.filter((item) => item !== categoryOption)
+          category: current.category.filter((item) => item !== categoryOption.id)
         };
       }
 
@@ -370,7 +709,7 @@ function App() {
 
       return {
         ...current,
-        category: [...current.category, categoryOption]
+        category: [...current.category, categoryOption.id]
       };
     });
   }
@@ -390,7 +729,7 @@ function App() {
       }
     }
 
-    if (step === 2 && (!logoFile || !screenshotFile)) {
+    if (step === 2 && (!logoFile && !formData.logo_url || !screenshotFile && !formData.image_url)) {
       setSubmitStatus("error");
       setSubmitMessage("Choose both a logo and a screenshot before continuing.");
       return false;
@@ -437,54 +776,113 @@ function App() {
     setSubmitStatus("submitting");
     setSubmitMessage("");
 
-    if (!logoFile || !screenshotFile) {
+    if ((!logoFile && !formData.logo_url) || (!screenshotFile && !formData.image_url)) {
       setSubmitStatus("error");
-      setSubmitMessage("Please choose both a logo and a screenshot from your computer.");
+      setSubmitMessage("Please choose both a logo and a screenshot before continuing.");
       return;
     }
 
-    const logoUpload = await uploadAsset(logoFile, "logos");
-    if (!logoUpload.success) {
-      setSubmitStatus("error");
-      setSubmitMessage(logoUpload.message);
-      return;
+    let nextLogoUrl = formData.logo_url;
+    if (logoFile) {
+      const logoUpload = await uploadAsset(logoFile, "logos");
+      if (!logoUpload.success) {
+        setSubmitStatus("error");
+        setSubmitMessage(logoUpload.message);
+        return;
+      }
+
+      nextLogoUrl = logoUpload.publicUrl;
     }
 
-    const screenshotUpload = await uploadAsset(screenshotFile, "screenshots");
-    if (!screenshotUpload.success) {
-      setSubmitStatus("error");
-      setSubmitMessage(screenshotUpload.message);
-      return;
+    let nextImageUrl = formData.image_url;
+    if (screenshotFile) {
+      const screenshotUpload = await uploadAsset(screenshotFile, "screenshots");
+      if (!screenshotUpload.success) {
+        setSubmitStatus("error");
+        setSubmitMessage(screenshotUpload.message);
+        return;
+      }
+
+      nextImageUrl = screenshotUpload.publicUrl;
     }
 
     const payload = {
       title: formData.title.trim(),
       slogan: formData.slogan.trim(),
       description: formData.description.trim(),
-      category: formData.category.join(", "),
       project_url: formData.project_url.trim(),
-      image_url: screenshotUpload.publicUrl,
-      logo_url: logoUpload.publicUrl,
+      image_url: nextImageUrl,
+      logo_url: nextLogoUrl,
       owner_id: session.user.id,
       owner_email: session.user.email
     };
 
-    const { error } = await supabase.from("projects").insert(payload);
+    const projectQuery = editingProject
+      ? supabase.from("projects").update(payload).eq("id", editingProject.id).select("id").single()
+      : supabase.from("projects").insert(payload).select("id").single();
+
+    const { data: savedProject, error } = await projectQuery;
+
     if (error) {
       setSubmitStatus("error");
       setSubmitMessage(
-        "Project submission failed. Check the `projects` table schema and Supabase RLS insert policy."
+        editingProject
+          ? "Project update failed. Add Supabase RLS update policy for the owner."
+          : "Project submission failed. Check the `projects` table schema and Supabase RLS insert policy."
       );
       console.error(error);
       return;
     }
 
+    const projectId = editingProject?.id || savedProject?.id;
+    if (projectId) {
+      const { error: deleteJoinError } = await supabase
+        .from("project_categories")
+        .delete()
+        .eq("project_id", projectId);
+
+      if (deleteJoinError && !isCategoryMigrationMissing(deleteJoinError)) {
+        setSubmitStatus("error");
+        setSubmitMessage("Project saved, but categories could not be updated. Apply the category migration first.");
+        console.error(deleteJoinError);
+        return;
+      }
+
+      if (formData.category.length) {
+        const { error: insertJoinError } = await supabase.from("project_categories").insert(
+          formData.category.map((categoryId) => ({
+            project_id: projectId,
+            category_id: categoryId
+          }))
+        );
+
+        if (insertJoinError && !isCategoryMigrationMissing(insertJoinError)) {
+          setSubmitStatus("error");
+          setSubmitMessage("Project saved, but categories could not be updated. Apply the category migration first.");
+          console.error(insertJoinError);
+          return;
+        }
+      }
+    }
+
     setFormData(initialForm);
     setLogoFile(null);
     setScreenshotFile(null);
+    setEditingProject(null);
     setSubmitStatus("success");
-    setSubmitMessage("Project submitted successfully and added to the listing.");
+    setSubmitMessage(
+      editingProject
+        ? "Project updated successfully."
+        : "Listing submitted for review."
+    );
     setIsModalOpen(false);
+    if (!editingProject) {
+      pushToast({
+        tone: "info",
+        title: "Listing submitted",
+        description: "Listing submitted for review."
+      });
+    }
     await loadProjects();
     await loadMyProjects(session);
   }
@@ -495,6 +893,34 @@ function App() {
     setModalStep(1);
     setIsCategoryMenuOpen(false);
     setIsMenuOpen(false);
+    setEditingProject(null);
+    setFormData(initialForm);
+    setLogoFile(null);
+    setScreenshotFile(null);
+    setIsModalOpen(true);
+  }
+
+  function openEditModal(project) {
+    setSubmitStatus("idle");
+    setSubmitMessage("");
+    setModalStep(1);
+    setIsCategoryMenuOpen(false);
+    setIsMenuOpen(false);
+    setEditingProject(project);
+    setFormData({
+      title: project.title || "",
+      slogan: project.slogan || "",
+      description: project.description || "",
+      category: getProjectCategoryIds(project).length
+        ? getProjectCategoryIds(project)
+        : [],
+      project_url: project.project_url || "",
+      image_url: project.image_url || "",
+      logo_url: project.logo_url || "",
+      launch_week: getCurrentWeekValue()
+    });
+    setLogoFile(null);
+    setScreenshotFile(null);
     setIsModalOpen(true);
   }
 
@@ -503,7 +929,84 @@ function App() {
     setSubmitStatus("idle");
     setSubmitMessage("");
     setIsCategoryMenuOpen(false);
+    setEditingProject(null);
+    setFormData(initialForm);
+    setLogoFile(null);
+    setScreenshotFile(null);
     setIsModalOpen(false);
+  }
+
+  async function handleDeleteProject(projectId) {
+    if (!supabase || !session) {
+      return;
+    }
+
+    const projectToDelete = myProjects.find((project) => project.id === projectId);
+    if (!projectToDelete) {
+      return;
+    }
+
+    const confirmed = window.confirm(`Move "${projectToDelete.title}" to deleted items? You can restore it later.`);
+    if (!confirmed) {
+      return;
+    }
+
+    setDeletingProjectId(projectId);
+    setMessage("");
+
+    const { error } = await supabase.from("projects").update({ deleted: true }).eq("id", projectId);
+
+    if (error) {
+      setMessage("Project deletion failed. Add Supabase RLS update policy for the owner.");
+      setStatus("error");
+      console.error(error);
+      setDeletingProjectId("");
+      return;
+    }
+
+    if (editingProject?.id === projectId) {
+      closeModal();
+    }
+
+    setDeletingProjectId("");
+    pushToast({
+      tone: "info",
+      title: "Listing deleted",
+      description: "The listing was moved to deleted items and can be restored."
+    });
+    setDashboardSearchQuery("");
+    setStatus("ready");
+    await loadProjects();
+    await loadMyProjects(session);
+  }
+
+  async function handleRestoreProject(projectId) {
+    if (!supabase || !session) {
+      return;
+    }
+
+    setRestoringProjectId(projectId);
+    setMessage("");
+
+    const { error } = await supabase.from("projects").update({ deleted: false }).eq("id", projectId);
+
+    if (error) {
+      setMessage("Project restore failed. Add Supabase RLS update policy for the owner.");
+      setStatus("error");
+      console.error(error);
+      setRestoringProjectId("");
+      return;
+    }
+
+    setRestoringProjectId("");
+    pushToast({
+      tone: "success",
+      title: "Listing restored",
+      description: "The listing was restored successfully."
+    });
+    setStatus("ready");
+    await loadProjects();
+    await loadMyProjects(session);
   }
 
   function toggleMenu() {
@@ -531,6 +1034,17 @@ function App() {
     window.history.pushState({}, "", `/project/${projectSlug}`);
     setActiveView("project");
     setActiveSlug(projectSlug);
+    setActivePreviewId("");
+    setActiveCategorySlug("");
+    setHomeCategoryFilterSlug("");
+    setIsMenuOpen(false);
+  }
+
+  function openProjectPreview(project) {
+    window.history.pushState({}, "", `/preview/${project.id}`);
+    setActiveView("project");
+    setActivePreviewId(project.id);
+    setActiveSlug("");
     setActiveCategorySlug("");
     setHomeCategoryFilterSlug("");
     setIsMenuOpen(false);
@@ -558,6 +1072,10 @@ function App() {
 
   function handleSearchQueryChange(event) {
     setSearchQuery(event.target.value);
+  }
+
+  function handleDashboardSearchQueryChange(event) {
+    setDashboardSearchQuery(event.target.value);
   }
 
   function showMoreProjects() {
@@ -630,7 +1148,7 @@ function App() {
   }
 
   function getProjectCategories(project) {
-    const categories = getCategoryList(project.category);
+    const categories = getProjectCategoryNames(project);
     return categories.length ? categories : ["Project"];
   }
 
@@ -640,24 +1158,29 @@ function App() {
     session?.user?.email ||
     "Signed in";
   const userAvatar = session?.user?.user_metadata?.avatar_url;
-  const activeProject = projects.find((project) => slugify(project.title) === activeSlug);
-  const allCategoryNames = Array.from(new Set(projects.flatMap((project) => getCategoryList(project.category))));
+  const publicProjects = projects.filter((project) => project.published);
+  const previewProject = myProjects.find((project) => project.id === activePreviewId);
+  const activeProject = activePreviewId
+    ? previewProject || null
+    : publicProjects.find((project) => slugify(project.title) === activeSlug);
+  const isPreviewProject = Boolean(activePreviewId);
+  const allCategoryNames = Array.from(new Set(publicProjects.flatMap((project) => getProjectCategoryNames(project))));
   const activeCategoryName =
     allCategoryNames.find((categoryName) => getCategorySlug(categoryName) === activeCategorySlug) || "";
-  const categoryProjects = projects.filter((project) =>
-    getCategoryList(project.category).some((categoryName) => getCategorySlug(categoryName) === activeCategorySlug)
+  const categoryProjects = publicProjects.filter((project) =>
+    getProjectCategoryNames(project).some((categoryName) => getCategorySlug(categoryName) === activeCategorySlug)
   );
   const categoryFilteredHomeProjects = homeCategoryFilterSlug
-    ? projects.filter((project) =>
-        getCategoryList(project.category).some(
+    ? publicProjects.filter((project) =>
+        getProjectCategoryNames(project).some(
           (categoryName) => getCategorySlug(categoryName) === homeCategoryFilterSlug
         )
       )
-    : projects;
+    : publicProjects;
   const normalizedSearchQuery = searchQuery.trim().toLowerCase();
   const filteredHomeProjects = normalizedSearchQuery
     ? categoryFilteredHomeProjects.filter((project) => {
-        const categoryText = getCategoryList(project.category).join(" ");
+        const categoryText = getProjectCategoryNames(project).join(" ");
         return [project.title, project.slogan, categoryText]
           .filter(Boolean)
           .some((value) => String(value).toLowerCase().includes(normalizedSearchQuery));
@@ -668,7 +1191,7 @@ function App() {
   const categoryCounts = allCategoryNames.map((categoryName) => ({
     name: categoryName,
     slug: getCategorySlug(categoryName),
-    count: projects.filter((project) => getCategoryList(project.category).includes(categoryName)).length
+    count: publicProjects.filter((project) => getProjectCategoryNames(project).includes(categoryName)).length
   }));
   const trendingProjects = filteredHomeProjects.slice(0, 3);
   const newlyAddedProjects = filteredHomeProjects.slice(3, 6).length
@@ -676,7 +1199,7 @@ function App() {
     : filteredHomeProjects.slice(0, 3);
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(125,211,252,0.22),_transparent_35%),radial-gradient(circle_at_top_right,_rgba(226,232,240,0.65),_transparent_30%),linear-gradient(180deg,_#f8fbff_0%,_#f8fafc_40%,_#f1f5f9_100%)] text-slate-900">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(125,211,252,0.22),_transparent_35%),radial-gradient(circle_at_top_right,_rgba(226,232,240,0.65),_transparent_30%),linear-gradient(180deg,_#f8fbff_0%,_#f8fafc_40%,_#f1f5f9_100%)] text-slate-900 dark:bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.12),_transparent_30%),radial-gradient(circle_at_top_right,_rgba(30,41,59,0.65),_transparent_28%),linear-gradient(180deg,_#020617_0%,_#0f172a_38%,_#111827_100%)] dark:text-slate-100">
       <div className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 pb-10 pt-4 sm:px-6 lg:px-8">
         <header className="sticky top-4 z-40">
           <Surface className="px-5 py-4 sm:px-6">
@@ -687,30 +1210,38 @@ function App() {
                     <SparklesIcon className="h-5 w-5" />
                   </div>
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.3em] text-sky-600">AI Tools</p>
-                    <p className="text-lg font-semibold tracking-tight text-slate-950">Listing Hub</p>
+                    <p className="text-xs font-semibold uppercase tracking-[0.3em] text-sky-600 dark:text-sky-400">AI Tools</p>
+                    <p className="text-lg font-semibold tracking-tight text-slate-950 dark:text-slate-100">Listing Hub</p>
                   </div>
                 </button>
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
-                <button className="rounded-full px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-950" onClick={openHome} type="button">
+                <button className="rounded-full px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-100" onClick={openHome} type="button">
                   Browse Tools
                 </button>
-                <button className="rounded-full px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-950" onClick={() => scrollToSection("features")} type="button">
+                <button className="rounded-full px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-100" onClick={() => scrollToSection("features")} type="button">
                   Features
                 </button>
-                <button className="rounded-full px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-950" onClick={() => scrollToSection("footer")} type="button">
+                <button className="rounded-full px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-100" onClick={() => scrollToSection("footer")} type="button">
                   Contact
                 </button>
               </div>
 
               <div className="flex items-center gap-3">
+                <button
+                  aria-label="Toggle theme"
+                  className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-950 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-100"
+                  onClick={toggleTheme}
+                  type="button"
+                >
+                  {theme === "dark" ? <SunIcon className="h-5 w-5" /> : <MoonIcon className="h-5 w-5" />}
+                </button>
                 {hasSupabaseCredentials ? (
                   session ? (
                     <div className="relative">
                       <button
-                        className="flex items-center gap-3 rounded-full border border-slate-200 bg-white px-3 py-2 text-left transition hover:border-slate-300"
+                        className="flex items-center gap-3 rounded-full border border-slate-200 bg-white px-3 py-2 text-left transition hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-slate-600"
                         onClick={toggleMenu}
                         type="button"
                       >
@@ -721,18 +1252,18 @@ function App() {
                             {userName.slice(0, 1).toUpperCase()}
                           </span>
                         )}
-                        <span className="hidden text-sm font-medium text-slate-700 sm:inline">{userName}</span>
+                          <span className="hidden text-sm font-medium text-slate-700 dark:text-slate-300 sm:inline">{userName}</span>
                       </button>
                       {isMenuOpen ? (
                         <Surface className="absolute right-0 top-[calc(100%+12px)] w-64 p-2">
                           <div className="rounded-2xl px-3 py-3">
-                            <p className="text-sm font-semibold text-slate-950">{userName}</p>
-                            <p className="mt-1 text-xs text-slate-500">{session.user.email}</p>
+                            <p className="text-sm font-semibold text-slate-950 dark:text-slate-100">{userName}</p>
+                            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{session.user.email}</p>
                           </div>
-                          <button className="w-full rounded-2xl px-3 py-2 text-left text-sm font-medium text-slate-700 transition hover:bg-slate-50 hover:text-slate-950" onClick={openModal} type="button">
+                          <button className="w-full rounded-2xl px-3 py-2 text-left text-sm font-medium text-slate-700 transition hover:bg-slate-50 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-100" onClick={openModal} type="button">
                             Submit Tool
                           </button>
-                          <button className="w-full rounded-2xl px-3 py-2 text-left text-sm font-medium text-slate-700 transition hover:bg-slate-50 hover:text-slate-950" onClick={openDashboard} type="button">
+                          <button className="w-full rounded-2xl px-3 py-2 text-left text-sm font-medium text-slate-700 transition hover:bg-slate-50 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-100" onClick={openDashboard} type="button">
                             Dashboard
                           </button>
                           <button className="w-full rounded-2xl px-3 py-2 text-left text-sm font-medium text-rose-600 transition hover:bg-rose-50" onClick={handleSignOut} type="button">
@@ -752,7 +1283,7 @@ function App() {
                     </button>
                   )
                 ) : (
-                  <span className="hidden text-sm font-medium text-slate-500 sm:inline">Add Supabase keys to enable sign-in.</span>
+                  <span className="hidden text-sm font-medium text-slate-500 dark:text-slate-400 sm:inline">Add Supabase keys to enable sign-in.</span>
                 )}
               </div>
             </div>
@@ -765,14 +1296,27 @@ function App() {
               session={session}
               userName={userName}
               myProjects={myProjects}
+              dashboardSearchQuery={dashboardSearchQuery}
+              handleDashboardSearchQueryChange={handleDashboardSearchQueryChange}
               openHome={openHome}
               openModal={openModal}
+              openProjectPreview={openProjectPreview}
+              openEditModal={openEditModal}
+              handleDeleteProject={handleDeleteProject}
+              handleRestoreProject={handleRestoreProject}
+              deletingProjectId={deletingProjectId}
+              restoringProjectId={restoringProjectId}
               openProject={openProject}
               openCategoryPage={openCategoryPage}
               getProjectCategories={getProjectCategories}
             />
           ) : activeView === "project" ? (
-            <ProjectView activeProject={activeProject} activeSlug={activeSlug} openHome={openHome} openCategoryPage={openCategoryPage} />
+            <ProjectView
+              activeProject={activeProject}
+              isPreview={isPreviewProject}
+              openHome={openHome}
+              openCategoryPage={openCategoryPage}
+            />
           ) : activeView === "category" ? (
             <CategoryView
               activeCategoryName={activeCategoryName}
@@ -790,7 +1334,7 @@ function App() {
               trendingProjects={trendingProjects}
               newlyAddedProjects={newlyAddedProjects}
               filteredHomeProjects={filteredHomeProjects}
-              projects={projects}
+              projects={publicProjects}
               categoryCounts={categoryCounts}
               homeCategoryFilterSlug={homeCategoryFilterSlug}
               searchQuery={searchQuery}
@@ -813,18 +1357,18 @@ function App() {
           <Surface className="px-6 py-8 sm:px-8">
             <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
               <div className="space-y-3">
-                <p className="text-lg font-semibold tracking-tight text-slate-950">AI Tools Listing</p>
-                <p className="max-w-xl text-sm leading-7 text-slate-600">
+                <p className="text-lg font-semibold tracking-tight text-slate-950 dark:text-slate-100">AI Tools Listing</p>
+                <p className="max-w-xl text-sm leading-7 text-slate-600 dark:text-slate-400">
                   Your ultimate destination for discovering AI tools.
                 </p>
               </div>
-              <div className="flex flex-wrap gap-6 text-sm font-medium text-slate-500">
-                <button className="transition hover:text-slate-950" onClick={openHome} type="button">Browse</button>
-                <button className="transition hover:text-slate-950" onClick={() => scrollToSection("features")} type="button">Features</button>
-                <button className="transition hover:text-slate-950" onClick={openSubmitFlow} type="button">Submit</button>
+              <div className="flex flex-wrap gap-6 text-sm font-medium text-slate-500 dark:text-slate-400">
+                <button className="transition hover:text-slate-950 dark:hover:text-slate-100" onClick={openHome} type="button">Browse</button>
+                <button className="transition hover:text-slate-950 dark:hover:text-slate-100" onClick={() => scrollToSection("features")} type="button">Features</button>
+                <button className="transition hover:text-slate-950 dark:hover:text-slate-100" onClick={openSubmitFlow} type="button">Submit</button>
               </div>
             </div>
-            <div className="mt-8 border-t border-slate-200 pt-6 text-sm text-slate-500">
+            <div className="mt-8 border-t border-slate-200 pt-6 text-sm text-slate-500 dark:border-slate-800 dark:text-slate-400">
               Copyright {new Date().getFullYear()} AI Tools Listing. All rights reserved.
             </div>
           </Surface>
@@ -838,6 +1382,7 @@ function App() {
         totalModalSteps={totalModalSteps}
         submitStatus={submitStatus}
         submitMessage={submitMessage}
+        editingProject={editingProject}
         formData={formData}
         categoryOptions={categoryOptions}
         maxCategories={maxCategories}
@@ -856,6 +1401,7 @@ function App() {
         handleNextStep={handleNextStep}
         handleProjectSubmit={handleProjectSubmit}
       />
+      <ToastStack toasts={toasts} onDismiss={dismissToast} />
     </div>
   );
 }

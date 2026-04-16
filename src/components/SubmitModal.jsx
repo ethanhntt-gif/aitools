@@ -8,6 +8,7 @@ export default function SubmitModal({
   totalModalSteps,
   submitStatus,
   submitMessage,
+  editingProject,
   formData,
   categoryOptions,
   maxCategories,
@@ -30,6 +31,10 @@ export default function SubmitModal({
     return null;
   }
 
+  const selectedCategoryNames = formData.category
+    .map((categoryId) => categoryOptions.find((option) => option.id === categoryId)?.name)
+    .filter(Boolean);
+
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/55 px-4 py-10 backdrop-blur-sm" onClick={closeModal} role="presentation">
       <div
@@ -43,13 +48,13 @@ export default function SubmitModal({
           <div className="flex flex-col gap-6">
             <div className="flex items-start justify-between gap-4">
               <div className="space-y-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.28em] text-sky-600">Community publishing</p>
-                <h2 className="text-3xl font-semibold tracking-tight text-slate-950" id="submit-project-title">
-                  Submit your project
+                <p className="text-xs font-semibold uppercase tracking-[0.28em] text-sky-600 dark:text-sky-400">Community publishing</p>
+                <h2 className="text-3xl font-semibold tracking-tight text-slate-950 dark:text-slate-100" id="submit-project-title">
+                  {editingProject ? "Edit your project" : "Submit your project"}
                 </h2>
               </div>
               <button
-                className="rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-950"
+                className="rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-950 dark:border-slate-700 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-100"
                 onClick={closeModal}
                 type="button"
               >
@@ -63,7 +68,7 @@ export default function SubmitModal({
               <ModalStep step={3} active={modalStep >= 3} label="Launch week" />
             </div>
 
-            <p className="text-sm font-medium text-slate-500">Step {modalStep} of {totalModalSteps}</p>
+            <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Step {modalStep} of {totalModalSteps}</p>
 
             <form className="space-y-6" onSubmit={handleProjectSubmit}>
               {modalStep === 1 ? (
@@ -95,7 +100,7 @@ export default function SubmitModal({
                         type="button"
                       >
                         <span className={formData.category.length ? "text-slate-900" : "text-slate-400"}>
-                          {formData.category.length ? formData.category.join(", ") : "Choose categories"}
+                          {selectedCategoryNames.length ? selectedCategoryNames.join(", ") : "Choose categories"}
                         </span>
                         <span className="text-slate-400">{isCategoryMenuOpen ? "-" : "+"}</span>
                       </button>
@@ -108,12 +113,12 @@ export default function SubmitModal({
                           <div className="space-y-1" role="listbox" aria-label="Category options">
                             {categoryOptions.map((categoryOption) => (
                               (() => {
-                                const isSelected = formData.category.includes(categoryOption);
+                                const isSelected = formData.category.includes(categoryOption.id);
                                 const isDisabled = !isSelected && formData.category.length >= maxCategories;
 
                                 return (
                               <button
-                                key={categoryOption}
+                                key={categoryOption.id}
                                 className={`flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left text-sm transition ${
                                   isSelected
                                     ? "bg-sky-50 text-sky-700"
@@ -126,11 +131,11 @@ export default function SubmitModal({
                                 aria-selected={isSelected}
                                 role="option"
                                 type="button"
-                              >
-                                <span className="flex h-5 w-5 items-center justify-center rounded-full border border-current/20 text-xs">
-                                  {isSelected ? "x" : ""}
-                                </span>
-                                {categoryOption}
+                                >
+                                  <span className="flex h-5 w-5 items-center justify-center rounded-full border border-current/20 text-xs">
+                                    {isSelected ? "x" : ""}
+                                  </span>
+                                {categoryOption.name}
                               </button>
                                 );
                               })()
@@ -204,7 +209,11 @@ export default function SubmitModal({
                     >
                       <strong className="block text-base font-semibold text-slate-950">Logo</strong>
                       <span className="mt-2 block text-sm leading-6 text-slate-500">
-                        {logoFile ? logoFile.name : "Click to choose a logo from your computer"}
+                        {logoFile
+                          ? logoFile.name
+                          : formData.logo_url
+                            ? "Current logo kept. Click to replace it."
+                            : "Click to choose a logo from your computer"}
                       </span>
                     </button>
 
@@ -215,7 +224,11 @@ export default function SubmitModal({
                     >
                       <strong className="block text-base font-semibold text-slate-950">Screenshot</strong>
                       <span className="mt-2 block text-sm leading-6 text-slate-500">
-                        {screenshotFile ? screenshotFile.name : "Click to choose a screenshot from your computer"}
+                        {screenshotFile
+                          ? screenshotFile.name
+                          : formData.image_url
+                            ? "Current screenshot kept. Click to replace it."
+                            : "Click to choose a screenshot from your computer"}
                       </span>
                     </button>
                   </div>
@@ -230,6 +243,12 @@ export default function SubmitModal({
                             className="max-h-36 w-auto rounded-2xl object-contain"
                             src={URL.createObjectURL(logoFile)}
                           />
+                        ) : formData.logo_url ? (
+                          <img
+                            alt="Current logo preview"
+                            className="max-h-36 w-auto rounded-2xl object-contain"
+                            src={formData.logo_url}
+                          />
                         ) : (
                           <div className="text-sm text-slate-400">No logo selected</div>
                         )}
@@ -243,6 +262,12 @@ export default function SubmitModal({
                             alt="Screenshot preview"
                             className="max-h-52 w-full rounded-2xl object-cover"
                             src={URL.createObjectURL(screenshotFile)}
+                          />
+                        ) : formData.image_url ? (
+                          <img
+                            alt="Current screenshot preview"
+                            className="max-h-52 w-full rounded-2xl object-cover"
+                            src={formData.image_url}
                           />
                         ) : (
                           <div className="text-sm text-slate-400">No screenshot selected</div>
@@ -305,7 +330,13 @@ export default function SubmitModal({
                     disabled={submitStatus === "submitting"}
                     type="submit"
                   >
-                    {submitStatus === "submitting" ? "Submitting..." : "Submit project"}
+                    {submitStatus === "submitting"
+                      ? editingProject
+                        ? "Saving..."
+                        : "Submitting..."
+                      : editingProject
+                        ? "Save changes"
+                        : "Submit project"}
                   </button>
                 )}
               </div>
