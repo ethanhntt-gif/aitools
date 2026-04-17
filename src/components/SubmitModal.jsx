@@ -40,7 +40,7 @@ export default function SubmitModal({
   const launchWeekNumber = Number(formData.launch_week);
   const visibleLaunchSlots = showAllLaunchSlots
     ? launchSlotOptions
-    : launchSlotOptions.filter((slot, index) => index < 12 || String(slot.week) === String(formData.launch_week));
+    : launchSlotOptions.filter((slot, index) => index < 9 || String(slot.week) === String(formData.launch_week));
   const hasHiddenLaunchSlots = launchSlotOptions.length > visibleLaunchSlots.length;
   const launchWeekSummary = Number.isInteger(launchWeekNumber) && launchWeekNumber > 0
     ? (() => {
@@ -58,7 +58,7 @@ export default function SubmitModal({
   }, [isOpen, modalStep]);
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/55 px-4 py-10 backdrop-blur-sm" onClick={closeModal} role="presentation">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/55 px-4 py-10 backdrop-blur-sm" role="presentation">
       <div
         className="mx-auto w-full max-w-4xl"
         onClick={(event) => event.stopPropagation()}
@@ -92,7 +92,7 @@ export default function SubmitModal({
 
             <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Step {modalStep} of {totalModalSteps}</p>
 
-            <form className="space-y-6" onSubmit={handleProjectSubmit}>
+            <div className="space-y-6">
               {modalStep === 1 ? (
                 <div className="grid gap-5 sm:grid-cols-2">
                   <label className="space-y-2 sm:col-span-1">
@@ -408,13 +408,6 @@ export default function SubmitModal({
 
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex flex-wrap gap-3">
-                  <button
-                    className="inline-flex items-center justify-center rounded-full border border-slate-200 px-5 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
-                    onClick={closeModal}
-                    type="button"
-                  >
-                    Cancel
-                  </button>
                   {modalStep > 1 ? (
                     <button
                       className="inline-flex items-center justify-center rounded-full border border-slate-200 px-5 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
@@ -438,7 +431,8 @@ export default function SubmitModal({
                   <button
                     className="inline-flex items-center justify-center rounded-full bg-slate-950 px-6 py-3 text-sm font-semibold text-white transition hover:bg-sky-600 disabled:cursor-not-allowed disabled:opacity-60"
                     disabled={submitStatus === "submitting"}
-                    type="submit"
+                    onClick={handleProjectSubmit}
+                    type="button"
                   >
                     {submitStatus === "submitting"
                       ? editingProject
@@ -462,7 +456,7 @@ export default function SubmitModal({
                   {submitMessage}
                 </div>
               ) : null}
-            </form>
+            </div>
           </div>
         </Surface>
       </div>

@@ -1332,7 +1332,9 @@ function App() {
   }
 
   async function handleProjectSubmit(event) {
-    event.preventDefault();
+    if (event?.preventDefault) {
+      event.preventDefault();
+    }
 
     if (!supabase || !session) {
       setSubmitStatus("error");
