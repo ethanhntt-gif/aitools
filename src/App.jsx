@@ -523,6 +523,7 @@ function App() {
   const [profileLogoFile, setProfileLogoFile] = useState(null);
   const [submitStatus, setSubmitStatus] = useState("idle");
   const [submitMessage, setSubmitMessage] = useState("");
+  const [invalidFields, setInvalidFields] = useState({});
   const [toasts, setToasts] = useState([]);
   const [editingProject, setEditingProject] = useState(null);
   const [deletingProjectId, setDeletingProjectId] = useState("");
@@ -1280,6 +1281,15 @@ function App() {
 
   function handleInputChange(event) {
     const { name, value } = event.target;
+    setInvalidFields((current) => {
+      if (!current[name]) {
+        return current;
+      }
+
+      const nextValue = { ...current };
+      delete nextValue[name];
+      return nextValue;
+    });
     setFormData((current) => ({
       ...current,
       [name]: value
@@ -1325,6 +1335,15 @@ function App() {
   function selectCategory(categoryOption) {
     setSubmitStatus("idle");
     setSubmitMessage("");
+    setInvalidFields((current) => {
+      if (!current.category) {
+        return current;
+      }
+
+      const nextValue = { ...current };
+      delete nextValue.category;
+      return nextValue;
+    });
     setFormData((current) => {
       if (current.category.includes(categoryOption.id)) {
         return {
@@ -1349,6 +1368,15 @@ function App() {
   function selectPricingModel(pricingModel) {
     setSubmitStatus("idle");
     setSubmitMessage("");
+    setInvalidFields((current) => {
+      if (!current.pricing_model) {
+        return current;
+      }
+
+      const nextValue = { ...current };
+      delete nextValue.pricing_model;
+      return nextValue;
+    });
     setFormData((current) => ({
       ...current,
       pricing_model: pricingModel
@@ -1358,43 +1386,51 @@ function App() {
 
   function validateModalStep(step) {
     if (step === 1) {
-      if (!formData.title.trim() || !formData.category.length || !formData.description.trim()) {
-        setSubmitStatus("error");
-        setSubmitMessage("Fill in the project title, choose at least one category, and add a description.");
-        return false;
-      }
+      const nextInvalidFields = {
+        title: !formData.title.trim(),
+        project_url: !formData.project_url.trim(),
+        pricing_model: !normalizePricingModel(formData.pricing_model),
+        category: !formData.category.length,
+        description: !formData.description.trim()
+      };
 
-      if (!normalizePricingModel(formData.pricing_model)) {
+      if (Object.values(nextInvalidFields).some(Boolean)) {
+        setInvalidFields(nextInvalidFields);
         setSubmitStatus("error");
-        setSubmitMessage("Choose a pricing model: Free, Freemium, or Paid.");
-        return false;
-      }
-
-      if (!formData.project_url.trim()) {
-        setSubmitStatus("error");
-        setSubmitMessage("Add the project URL before continuing.");
+        setSubmitMessage("");
         return false;
       }
     }
 
     if (step === 2 && (!logoFile && !formData.logo_url || !screenshotFile && !formData.image_url)) {
+      setInvalidFields({
+        logo_url: !logoFile && !formData.logo_url,
+        image_url: !screenshotFile && !formData.image_url
+      });
       setSubmitStatus("error");
-      setSubmitMessage("Choose both a logo and a screenshot before continuing.");
+      setSubmitMessage("");
       return false;
     }
 
     if (step === 3 && !formData.launch_week) {
+      setInvalidFields({
+        launch_week: true
+      });
       setSubmitStatus("error");
-      setSubmitMessage("Choose the launch week before submitting.");
+      setSubmitMessage("");
       return false;
     }
 
     if (step === 3 && (!Number.isInteger(Number(formData.launch_week)) || Number(formData.launch_week) < 1)) {
+      setInvalidFields({
+        launch_week: true
+      });
       setSubmitStatus("error");
-      setSubmitMessage("Launch week must be a positive number.");
+      setSubmitMessage("");
       return false;
     }
 
+    setInvalidFields({});
     setSubmitStatus("idle");
     setSubmitMessage("");
     return true;
@@ -1433,8 +1469,12 @@ function App() {
     setSubmitMessage("");
 
     if ((!logoFile && !formData.logo_url) || (!screenshotFile && !formData.image_url)) {
+      setInvalidFields({
+        logo_url: !logoFile && !formData.logo_url,
+        image_url: !screenshotFile && !formData.image_url
+      });
       setSubmitStatus("error");
-      setSubmitMessage("Please choose both a logo and a screenshot before continuing.");
+      setSubmitMessage("");
       return;
     }
 
@@ -1655,6 +1695,7 @@ function App() {
     setModalStep(1);
     setIsCategoryMenuOpen(false);
     setIsPricingMenuOpen(false);
+    setInvalidFields({});
     setIsMenuOpen(false);
     setEditingProject(null);
     setFormData(initialForm);
@@ -1669,6 +1710,7 @@ function App() {
     setModalStep(1);
     setIsCategoryMenuOpen(false);
     setIsPricingMenuOpen(false);
+    setInvalidFields({});
     setIsMenuOpen(false);
     setEditingProject(project);
     setFormData({
@@ -1695,6 +1737,7 @@ function App() {
     setSubmitMessage("");
     setIsCategoryMenuOpen(false);
     setIsPricingMenuOpen(false);
+    setInvalidFields({});
     setEditingProject(null);
     setFormData(initialForm);
     setLogoFile(null);
@@ -1997,10 +2040,28 @@ function App() {
     }
 
     if (type === "logo") {
+      setInvalidFields((current) => {
+        if (!current.logo_url) {
+          return current;
+        }
+
+        const nextValue = { ...current };
+        delete nextValue.logo_url;
+        return nextValue;
+      });
       setLogoFile(file);
       return;
     }
 
+    setInvalidFields((current) => {
+      if (!current.image_url) {
+        return current;
+      }
+
+      const nextValue = { ...current };
+      delete nextValue.image_url;
+      return nextValue;
+    });
     setScreenshotFile(file);
   }
 
@@ -2432,6 +2493,7 @@ function App() {
         pricingMenuRef={pricingMenuRef}
         togglePricingMenu={togglePricingMenu}
         selectPricingModel={selectPricingModel}
+        invalidFields={invalidFields}
         handleInputChange={handleInputChange}
         launchSlotOptions={launchSlotOptions}
         launchYear={launchYear}

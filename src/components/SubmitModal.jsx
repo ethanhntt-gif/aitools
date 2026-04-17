@@ -20,6 +20,7 @@ export default function SubmitModal({
   pricingMenuRef,
   togglePricingMenu,
   selectPricingModel,
+  invalidFields,
   handleInputChange,
   launchSlotOptions,
   launchYear,
@@ -56,6 +57,11 @@ export default function SubmitModal({
         return `${launchYear} / Week ${launchWeekNumber}${selectedDateLabel ? ` / ${selectedDateLabel}` : ""}`;
       })()
     : "";
+  const getFieldClassName = (fieldName, baseClassName) => `${baseClassName}${
+    invalidFields?.[fieldName]
+      ? " border-rose-400 ring-4 ring-rose-100 focus:border-rose-400 focus:ring-4 focus:ring-rose-100"
+      : ""
+  }`;
 
   useEffect(() => {
     if (!isOpen || modalStep !== 3) {
@@ -146,25 +152,27 @@ export default function SubmitModal({
                   <label className="space-y-2 sm:col-span-1">
                     <span className="text-sm font-semibold text-slate-700">Project title</span>
                     <input
-                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
+                      className={getFieldClassName("title", "w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100")}
                       name="title"
                       value={formData.title}
                       onChange={handleInputChange}
                       placeholder="AI SEO Bot"
                       type="text"
                     />
+                    {invalidFields?.title ? <p className="text-sm text-rose-600">Project title is required.</p> : null}
                   </label>
 
                   <label className="space-y-2 sm:col-span-1">
                     <span className="text-sm font-semibold text-slate-700">Project URL</span>
                     <input
-                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
+                      className={getFieldClassName("project_url", "w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100")}
                       name="project_url"
                       value={formData.project_url}
                       onChange={handleInputChange}
                       placeholder="https://your-project.com"
                       type="url"
                     />
+                    {invalidFields?.project_url ? <p className="text-sm text-rose-600">Project URL is required.</p> : null}
                   </label>
 
                   <label className="space-y-2 sm:col-span-1">
@@ -174,9 +182,11 @@ export default function SubmitModal({
                         aria-expanded={isPricingMenuOpen}
                         aria-haspopup="listbox"
                         className={`flex w-full items-center justify-between rounded-2xl border bg-white px-4 py-3 text-left text-sm transition ${
-                          isPricingMenuOpen
-                            ? "border-sky-400 ring-4 ring-sky-100"
-                            : "border-slate-200 hover:border-slate-300"
+                          invalidFields?.pricing_model
+                            ? "border-rose-400 ring-4 ring-rose-100"
+                            : isPricingMenuOpen
+                              ? "border-sky-400 ring-4 ring-sky-100"
+                              : "border-slate-200 hover:border-slate-300"
                         }`}
                         onClick={togglePricingMenu}
                         type="button"
@@ -216,6 +226,7 @@ export default function SubmitModal({
                         </Surface>
                       ) : null}
                     </div>
+                    {invalidFields?.pricing_model ? <p className="text-sm text-rose-600">Choose a pricing model.</p> : null}
                   </label>
 
                   <label className="space-y-2 sm:col-span-1">
@@ -225,9 +236,11 @@ export default function SubmitModal({
                         aria-expanded={isCategoryMenuOpen}
                         aria-haspopup="listbox"
                         className={`flex w-full items-center justify-between rounded-2xl border bg-white px-4 py-3 text-left text-sm transition ${
-                          isCategoryMenuOpen
-                            ? "border-sky-400 ring-4 ring-sky-100"
-                            : "border-slate-200 hover:border-slate-300"
+                          invalidFields?.category
+                            ? "border-rose-400 ring-4 ring-rose-100"
+                            : isCategoryMenuOpen
+                              ? "border-sky-400 ring-4 ring-sky-100"
+                              : "border-slate-200 hover:border-slate-300"
                         }`}
                         onClick={toggleCategoryMenu}
                         type="button"
@@ -240,6 +253,7 @@ export default function SubmitModal({
                       <p className="mt-2 text-xs text-slate-500">
                         Choose up to {maxCategories} categories. Selected: {formData.category.length}/{maxCategories}
                       </p>
+                      {invalidFields?.category ? <p className="mt-2 text-sm text-rose-600">Choose at least one category.</p> : null}
 
                       {isCategoryMenuOpen ? (
                         <Surface className="absolute left-0 right-0 top-[calc(100%+12px)] z-10 max-h-72 overflow-y-auto p-2">
@@ -294,13 +308,14 @@ export default function SubmitModal({
                   <label className="space-y-2 sm:col-span-2">
                     <span className="text-sm font-semibold text-slate-700">Description</span>
                     <textarea
-                      className="min-h-36 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
+                      className={getFieldClassName("description", "min-h-36 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100")}
                       name="description"
                       value={formData.description}
                       onChange={handleInputChange}
                       placeholder="Describe what your project does and why it matters."
                       rows="5"
                     />
+                    {invalidFields?.description ? <p className="text-sm text-rose-600">Description is required.</p> : null}
                   </label>
                 </div>
               ) : null}
@@ -324,7 +339,11 @@ export default function SubmitModal({
 
                   <div className="grid gap-5 md:grid-cols-2">
                     <button
-                      className="rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-6 py-8 text-left transition hover:border-sky-400 hover:bg-sky-50"
+                      className={`rounded-[24px] border border-dashed px-6 py-8 text-left transition ${
+                        invalidFields?.logo_url
+                          ? "border-rose-400 bg-rose-50"
+                          : "border-slate-300 bg-slate-50 hover:border-sky-400 hover:bg-sky-50"
+                      }`}
                       onClick={() => handleDropZoneClick("logo_url")}
                       type="button"
                     >
@@ -339,7 +358,11 @@ export default function SubmitModal({
                     </button>
 
                     <button
-                      className="rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-6 py-8 text-left transition hover:border-sky-400 hover:bg-sky-50"
+                      className={`rounded-[24px] border border-dashed px-6 py-8 text-left transition ${
+                        invalidFields?.image_url
+                          ? "border-rose-400 bg-rose-50"
+                          : "border-slate-300 bg-slate-50 hover:border-sky-400 hover:bg-sky-50"
+                      }`}
                       onClick={() => handleDropZoneClick("image_url")}
                       type="button"
                     >
@@ -353,6 +376,12 @@ export default function SubmitModal({
                       </span>
                     </button>
                   </div>
+                  {(invalidFields?.logo_url || invalidFields?.image_url) ? (
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <div>{invalidFields?.logo_url ? <p className="text-sm text-rose-600">Logo is required.</p> : null}</div>
+                      <div>{invalidFields?.image_url ? <p className="text-sm text-rose-600">Screenshot is required.</p> : null}</div>
+                    </div>
+                  ) : null}
 
                   <div className="grid gap-5 md:grid-cols-2">
                     <Surface className="p-5">
@@ -400,7 +429,7 @@ export default function SubmitModal({
               ) : null}
 
               {modalStep === 3 ? (
-                <Surface className="p-6">
+                <Surface className={`p-6 ${invalidFields?.launch_week ? "ring-2 ring-rose-300" : ""}`}>
                   <div className="space-y-2">
                     <span className="text-sm font-semibold text-slate-700">Upcoming launch slots</span>
                     <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
@@ -497,6 +526,11 @@ export default function SubmitModal({
                   {formData.launch_week && (!Number.isInteger(launchWeekNumber) || launchWeekNumber < 1) ? (
                     <p className="mt-3 text-sm text-rose-600">
                       Please enter a positive week number.
+                    </p>
+                  ) : null}
+                  {invalidFields?.launch_week ? (
+                    <p className="mt-3 text-sm text-rose-600">
+                      Choose a launch week to continue.
                     </p>
                   ) : null}
                 </Surface>
