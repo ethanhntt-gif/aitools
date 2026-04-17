@@ -223,18 +223,19 @@ export function DashboardView({
   useEffect(() => {
     if (!isProfileEditorOpen) {
       document.body.style.overflow = "";
-      document.documentElement.style.overflow = "";
+      document.body.style.paddingRight = "";
       return undefined;
     }
 
     const previousBodyOverflow = document.body.style.overflow;
-    const previousHtmlOverflow = document.documentElement.style.overflow;
+    const previousBodyPaddingRight = document.body.style.paddingRight;
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
     document.body.style.overflow = "hidden";
-    document.documentElement.style.overflow = "hidden";
+    document.body.style.paddingRight = scrollbarWidth > 0 ? `${scrollbarWidth}px` : previousBodyPaddingRight;
 
     return () => {
       document.body.style.overflow = previousBodyOverflow || "";
-      document.documentElement.style.overflow = previousHtmlOverflow || "";
+      document.body.style.paddingRight = previousBodyPaddingRight || "";
     };
   }, [isProfileEditorOpen]);
 
