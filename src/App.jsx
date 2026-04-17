@@ -1394,6 +1394,7 @@ function App() {
       title: formData.title.trim(),
       slogan: formData.slogan.trim(),
       description: formData.description.trim(),
+      category: getSelectedCategoryNames(formData.category, categoryOptions).join(", "),
       project_url: formData.project_url.trim(),
       image_url: nextImageUrl,
       logo_url: nextLogoUrl,

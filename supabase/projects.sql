@@ -137,6 +137,20 @@ using (
   )
 );
 
+create policy "Authenticated users can read published project categories"
+on public.project_categories
+for select
+to authenticated
+using (
+  exists (
+    select 1
+    from public.projects
+    where public.projects.id = project_id
+      and public.projects.published = true
+      and public.projects.deleted = false
+  )
+);
+
 create policy "Users can manage own project categories"
 on public.project_categories
 for all

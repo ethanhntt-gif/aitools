@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { ArrowUpRightIcon, EyeIcon, PenIcon, RefreshIcon, SearchIcon, TrashIcon } from "./icons";
 import { EmptyState, SectionIntro, StatCard, SuccessOverlay, Surface, ToolCard } from "./ui";
 
@@ -87,6 +88,23 @@ function formatLaunchSchedule(project) {
   return `Week ${launchWeek}`;
 }
 
+function DashboardSection({ eyebrow, title, count, children }) {
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-400 dark:text-slate-500">{eyebrow}</p>
+          <h3 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950 dark:text-slate-100">{title}</h3>
+        </div>
+        <div className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
+          {count} items
+        </div>
+      </div>
+      {children}
+    </div>
+  );
+}
+
 function ListingRow({
   project,
   deletingProjectId,
@@ -107,10 +125,10 @@ function ListingRow({
   const launchSchedule = formatLaunchSchedule(project);
 
   return (
-    <div className="flex flex-col gap-4 px-4 py-4 sm:px-5 lg:flex-row lg:items-center lg:justify-between">
+    <div className="flex flex-col gap-4 px-4 py-4 transition hover:bg-slate-50/70 dark:hover:bg-slate-900/60 sm:px-5 lg:flex-row lg:items-center lg:justify-between">
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-center gap-3">
-          <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${listingStatusMeta.dotClassName}`} title={listingStatusMeta.label} />
+          <span className={`h-2.5 w-2.5 shrink-0 rounded-full shadow-[0_0_0_4px_rgba(15,23,42,0.04)] dark:shadow-[0_0_0_4px_rgba(148,163,184,0.08)] ${listingStatusMeta.dotClassName}`} title={listingStatusMeta.label} />
           {project.logo_url ? (
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white p-1.5 dark:border-slate-700 dark:bg-slate-950">
               <img className="max-h-full max-w-full rounded-xl object-contain" src={project.logo_url} alt={project.title} />
@@ -123,7 +141,7 @@ function ListingRow({
           <div className="min-w-0 flex-1">
             <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
               <p className="truncate text-sm font-semibold tracking-tight text-slate-950 dark:text-slate-100">{project.title}</p>
-              <span className="inline-flex w-fit items-center rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+              <span className="inline-flex w-fit items-center rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
                 {listingStatusMeta.label}
               </span>
             </div>
@@ -253,29 +271,95 @@ export function DashboardView({
     };
   }, [isProfileEditorOpen, profileSaveStatus]);
 
+  const profileEditorModal = isOwnDashboard && isProfileEditorOpen && typeof document !== "undefined"
+    ? createPortal(
+      <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/55 px-4 py-10 backdrop-blur-sm" onClick={() => setIsProfileEditorOpen(false)} role="presentation">
+        <div className="mx-auto w-full max-w-3xl" onClick={(event) => event.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="edit-profile-title">
+          <Surface className="relative overflow-hidden p-6 sm:p-8">
+            <SuccessOverlay
+              isVisible={profileSaveStatus === "success"}
+              title="Saved"
+              description={profileSaveMessage}
+            />
+            <div className="flex items-start justify-between gap-4">
+              <div className="space-y-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.28em] text-sky-600 dark:text-sky-400">Public author profile</p>
+                <h3 className="text-3xl font-semibold tracking-tight text-slate-950 dark:text-slate-100" id="edit-profile-title">Edit profile</h3>
+              </div>
+              <button className="rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-950 dark:border-slate-700 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-100" onClick={() => setIsProfileEditorOpen(false)} type="button">
+                Close
+              </button>
+            </div>
+            <form className="mt-6 grid gap-5 lg:grid-cols-2" onSubmit={handleProfileSave}>
+              <input ref={profileLogoInputRef} accept="image/*" className="hidden" onChange={handleProfileLogoFileChange} type="file" />
+              <div className="lg:col-span-2 grid gap-5 md:grid-cols-[180px_minmax(0,1fr)]">
+                <button className="flex min-h-[180px] items-center justify-center overflow-hidden rounded-[24px] border border-dashed border-slate-300 bg-slate-50 text-slate-500 transition hover:border-sky-400 hover:bg-sky-50" onClick={() => profileLogoInputRef.current?.click()} type="button">
+                  {profileLogoPreview ? <img alt="Profile logo preview" className="h-full w-full object-cover" src={profileLogoPreview} /> : <span className="px-6 text-center text-sm font-medium">Upload logo</span>}
+                </button>
+                <div className="space-y-3">
+                  <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">Profile logo</p>
+                  <p className="text-sm leading-6 text-slate-500 dark:text-slate-400">
+                    Upload a square logo or avatar. It will appear next to your name in the public profile.
+                  </p>
+                  {profileLogoFile ? <p className="text-sm font-medium text-slate-700 dark:text-slate-300">{profileLogoFile.name}</p> : null}
+                  <button className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-950 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:border-slate-600 dark:hover:bg-slate-900 dark:hover:text-slate-100" onClick={() => profileLogoInputRef.current?.click()} type="button">
+                    Choose image
+                  </button>
+                </div>
+              </div>
+              <label className="space-y-2 lg:col-span-2">
+                <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Display name</span>
+                <input className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:focus:ring-sky-500/20" name="display_name" onChange={handleProfileInputChange} placeholder="Ethan Hunt" type="text" value={profileForm.display_name} />
+              </label>
+              <label className="space-y-2 lg:col-span-2">
+                <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Bio</span>
+                <textarea className="min-h-32 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:focus:ring-sky-500/20" name="bio" onChange={handleProfileInputChange} placeholder="Tell people what you build and who it is for." rows="5" value={profileForm.bio} />
+              </label>
+              <div className="lg:col-span-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                {profileSaveMessage ? (
+                  <div className={`rounded-2xl px-4 py-3 text-sm font-medium ${
+                    profileSaveStatus === "error"
+                      ? "bg-rose-50 text-rose-700 ring-1 ring-rose-200"
+                      : "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200"
+                  }`}>
+                    {profileSaveMessage}
+                  </div>
+                ) : <div />}
+                <button className="inline-flex items-center justify-center rounded-full bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-sky-600 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-sky-500 dark:hover:bg-sky-400" disabled={profileSaveStatus === "saving"} type="submit">
+                  {profileSaveStatus === "saving" ? "Saving..." : "Save profile"}
+                </button>
+              </div>
+            </form>
+          </Surface>
+        </div>
+      </div>,
+      document.body
+    )
+    : null;
+
   return (
     <section className="space-y-6">
-      <SectionIntro eyebrow="" title={isOwnDashboard ? "Your dashboard" : profileName} description="" action={<button className="inline-flex items-center justify-center rounded-full border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white dark:border-slate-700 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-900 dark:hover:text-slate-100" onClick={openHome} type="button">Back to weekly launch</button>} />
+      <SectionIntro eyebrow="Creator space" title={isOwnDashboard ? "Your dashboard" : profileName} description={isOwnDashboard ? "Manage listings in the same launch-board visual language as the homepage." : "Published work shown in the same dark board style as the weekly launch list."} action={<button className="inline-flex items-center justify-center rounded-full border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white dark:border-slate-700 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-900 dark:hover:text-slate-100" onClick={openHome} type="button">Back to weekly launch</button>} />
       {dashboardProfile ? (
         <>
           <Surface className="group relative overflow-hidden">
-            <div className="bg-[linear-gradient(135deg,_rgba(15,23,42,1)_0%,_rgba(15,23,42,0.97)_48%,_rgba(3,105,161,0.9)_100%)] px-6 py-8 text-white sm:px-8 sm:py-10">
+            <div className="bg-[linear-gradient(135deg,_rgba(248,250,252,0.98)_0%,_rgba(226,232,240,0.92)_48%,_rgba(186,230,253,0.9)_100%)] px-6 py-8 text-slate-950 dark:bg-[linear-gradient(135deg,_rgba(2,6,23,1)_0%,_rgba(15,23,42,0.98)_48%,_rgba(3,105,161,0.88)_100%)] dark:text-white sm:px-8 sm:py-10">
               <div className="flex items-start gap-5">
-                <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-[28px] border border-white/15 bg-white text-3xl font-semibold text-slate-950 shadow-lg">
+                <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-[28px] border border-white/30 bg-white text-3xl font-semibold text-slate-950 shadow-lg dark:border-white/15">
                   {profileLogoPreview ? <img alt={profileName} className="h-full w-full object-cover" src={profileLogoPreview} /> : (profileName || "A").slice(0, 1).toUpperCase()}
                 </div>
                 <div className="min-w-0 pt-1">
-                  <h2 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">{profileName}</h2>
-                  <p className="mt-3 max-w-2xl text-sm leading-7 text-sky-50/90 sm:text-base">{profileBio}</p>
+                  <h2 className="text-3xl font-semibold tracking-tight text-slate-950 dark:text-white sm:text-4xl">{profileName}</h2>
+                  <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-700 dark:text-sky-50/90 sm:text-base">{profileBio}</p>
                 </div>
               </div>
             </div>
-            <div className="pointer-events-none absolute inset-0 bg-slate-950/40 opacity-0 transition duration-200 group-hover:opacity-100 group-focus-within:opacity-100" />
+            <div className="pointer-events-none absolute inset-0 bg-slate-950/10 opacity-0 transition duration-200 group-hover:opacity-100 group-focus-within:opacity-100 dark:bg-slate-950/40" />
             <div className="pointer-events-none absolute inset-y-0 right-0 flex translate-x-3 items-center px-6 opacity-0 transition duration-200 group-hover:translate-x-0 group-hover:opacity-100 group-focus-within:translate-x-0 group-focus-within:opacity-100 sm:px-8">
               <div className="pointer-events-auto flex flex-col items-end gap-3">
                 {isOwnDashboard ? (
                   <button
-                    className="inline-flex items-center justify-center rounded-full bg-white px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-sky-50"
+                    className="inline-flex items-center justify-center rounded-full bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-sky-600 dark:bg-white dark:text-slate-950 dark:hover:bg-sky-50"
                     onClick={() => {
                       resetProfileSaveFeedback();
                       setIsProfileEditorOpen(true);
@@ -288,86 +372,25 @@ export function DashboardView({
               </div>
             </div>
           </Surface>
-          <SectionIntro eyebrow={isOwnDashboard ? "Your content" : "Published work"} title={isOwnDashboard ? "My projects" : `${profileName}'s projects`} description={isOwnDashboard ? "Track moderation and update listings without the oversized card layout." : "Projects currently visible in the public directory."} action={isOwnDashboard ? <button className="inline-flex items-center justify-center rounded-full bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-sky-600" onClick={openModal} type="button">Submit Tool</button> : null} />
+          <SectionIntro eyebrow={isOwnDashboard ? "Your content" : "Published work"} title={isOwnDashboard ? "My projects" : `${profileName}'s projects`} description={isOwnDashboard ? "A darker launch-board style list for publishing, review, and cleanup." : "Projects currently visible in the public directory."} action={isOwnDashboard ? <button className="inline-flex items-center justify-center rounded-full bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-sky-600 dark:bg-sky-500 dark:hover:bg-sky-400" onClick={openModal} type="button">Submit Tool</button> : null} />
           {dashboardProjects.length ? (
             <div className="space-y-5">
-              <Surface className="p-3.5 sm:p-4">
+              <Surface className="overflow-hidden p-3.5 shadow-[0_16px_40px_-34px_rgba(15,23,42,0.18)] sm:p-4">
                 <label className="relative block">
                   <span className="sr-only">Search listings</span>
                   <SearchIcon className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                   <input className="w-full rounded-2xl border border-slate-200 bg-white py-2.5 pl-10 pr-4 text-sm text-slate-950 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:focus:ring-sky-500/20" onChange={handleDashboardSearchQueryChange} placeholder={isOwnDashboard ? "Search your listings" : "Search this author's projects"} type="search" value={dashboardSearchQuery} />
                 </label>
               </Surface>
-              {publishedProjects.length ? <div className="space-y-2.5"><div className="flex items-center justify-between gap-3"><p className="text-xs font-semibold uppercase tracking-[0.28em] text-emerald-600">Published</p><p className="text-xs text-slate-500 dark:text-slate-400">{publishedProjects.length} items</p></div>{isOwnDashboard ? <Surface className="overflow-hidden">{publishedProjects.map((project, index) => <div className={index === 0 ? "" : "border-t border-slate-200"} key={project.id}><ListingRow project={project} deletingProjectId={deletingProjectId} restoringProjectId={restoringProjectId} openProjectPreview={openProjectPreview} openEditModal={openEditModal} handleDeleteProject={handleDeleteProject} handleRestoreProject={handleRestoreProject} openProject={openProject} showPreviewAction={false} /></div>)}</Surface> : <div className="grid gap-6 md:grid-cols-2">{publishedProjects.map((project) => <ToolCard key={project.id} project={project} categories={getProjectCategories(project)} onOpenProject={openProject} onOpenCategoryPage={openCategoryPage} />)}</div>}</div> : null}
-              {isOwnDashboard && reviewProjects.length ? <div className="space-y-2.5"><div className="flex items-center justify-between gap-3"><p className="text-xs font-semibold uppercase tracking-[0.28em] text-sky-600">Under review</p><p className="text-xs text-slate-500 dark:text-slate-400">{reviewProjects.length} items</p></div><Surface className="overflow-hidden">{reviewProjects.map((project, index) => <div className={index === 0 ? "" : "border-t border-slate-200"} key={project.id}><ListingRow project={project} deletingProjectId={deletingProjectId} restoringProjectId={restoringProjectId} openProjectPreview={openProjectPreview} openEditModal={openEditModal} handleDeleteProject={handleDeleteProject} handleRestoreProject={handleRestoreProject} openProject={openProject} showPreviewAction /></div>)}</Surface></div> : null}
-              {isOwnDashboard && deletedProjects.length ? <div className="space-y-2.5"><div className="flex items-center justify-between gap-3"><p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-500">Deleted</p><p className="text-xs text-slate-500 dark:text-slate-400">{deletedProjects.length} items</p></div><Surface className="overflow-hidden">{deletedProjects.map((project, index) => <div className={index === 0 ? "" : "border-t border-slate-200"} key={project.id}><ListingRow project={project} deletingProjectId={deletingProjectId} restoringProjectId={restoringProjectId} openProjectPreview={openProjectPreview} openEditModal={openEditModal} handleDeleteProject={handleDeleteProject} handleRestoreProject={handleRestoreProject} openProject={openProject} showPreviewAction={false} /></div>)}</Surface></div> : null}
+              {publishedProjects.length ? <DashboardSection eyebrow="Launch board" title="Published" count={publishedProjects.length}>{isOwnDashboard ? <Surface className="overflow-hidden px-0 py-0 shadow-[0_16px_40px_-34px_rgba(15,23,42,0.18)]">{publishedProjects.map((project, index) => <div className={index === 0 ? "" : "border-t border-slate-200 dark:border-slate-800"} key={project.id}><ListingRow project={project} deletingProjectId={deletingProjectId} restoringProjectId={restoringProjectId} openProjectPreview={openProjectPreview} openEditModal={openEditModal} handleDeleteProject={handleDeleteProject} handleRestoreProject={handleRestoreProject} openProject={openProject} showPreviewAction={false} /></div>)}</Surface> : <div className="grid gap-6 md:grid-cols-2">{publishedProjects.map((project) => <ToolCard key={project.id} project={project} categories={getProjectCategories(project)} onOpenProject={openProject} onOpenCategoryPage={openCategoryPage} />)}</div>}</DashboardSection> : null}
+              {isOwnDashboard && reviewProjects.length ? <DashboardSection eyebrow="Moderation" title="Under review" count={reviewProjects.length}><Surface className="overflow-hidden px-0 py-0 shadow-[0_16px_40px_-34px_rgba(15,23,42,0.18)]">{reviewProjects.map((project, index) => <div className={index === 0 ? "" : "border-t border-slate-200 dark:border-slate-800"} key={project.id}><ListingRow project={project} deletingProjectId={deletingProjectId} restoringProjectId={restoringProjectId} openProjectPreview={openProjectPreview} openEditModal={openEditModal} handleDeleteProject={handleDeleteProject} handleRestoreProject={handleRestoreProject} openProject={openProject} showPreviewAction /></div>)}</Surface></DashboardSection> : null}
+              {isOwnDashboard && deletedProjects.length ? <DashboardSection eyebrow="Archive" title="Deleted" count={deletedProjects.length}><Surface className="overflow-hidden px-0 py-0 shadow-[0_16px_40px_-34px_rgba(15,23,42,0.18)]">{deletedProjects.map((project, index) => <div className={index === 0 ? "" : "border-t border-slate-200 dark:border-slate-800"} key={project.id}><ListingRow project={project} deletingProjectId={deletingProjectId} restoringProjectId={restoringProjectId} openProjectPreview={openProjectPreview} openEditModal={openEditModal} handleDeleteProject={handleDeleteProject} handleRestoreProject={handleRestoreProject} openProject={openProject} showPreviewAction={false} /></div>)}</Surface></DashboardSection> : null}
               {!filteredProjects.length ? <EmptyState>No listings match your search.</EmptyState> : null}
             </div>
           ) : <EmptyState>{isOwnDashboard ? "You have not submitted any projects yet. Use the submit button to add your first one." : "This author has no public projects yet."}</EmptyState>}
         </>
       ) : <EmptyState>{session ? "This profile is not ready yet." : "Sign in with Google first to open your dashboard."}</EmptyState>}
-      {isOwnDashboard && isProfileEditorOpen ? (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/55 px-4 py-10 backdrop-blur-sm" onClick={() => setIsProfileEditorOpen(false)} role="presentation">
-          <div className="mx-auto w-full max-w-3xl" onClick={(event) => event.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="edit-profile-title">
-            <Surface className="relative overflow-hidden p-6 sm:p-8">
-              <SuccessOverlay
-                isVisible={profileSaveStatus === "success"}
-                title="Saved"
-                description={profileSaveMessage}
-              />
-              <div className="flex items-start justify-between gap-4">
-                <div className="space-y-3">
-                  <p className="text-xs font-semibold uppercase tracking-[0.28em] text-sky-600 dark:text-sky-400">Public author profile</p>
-                  <h3 className="text-3xl font-semibold tracking-tight text-slate-950 dark:text-slate-100" id="edit-profile-title">Edit profile</h3>
-                </div>
-                <button className="rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-950 dark:border-slate-700 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-100" onClick={() => setIsProfileEditorOpen(false)} type="button">
-                  Close
-                </button>
-              </div>
-              <form className="mt-6 grid gap-5 lg:grid-cols-2" onSubmit={handleProfileSave}>
-                <input ref={profileLogoInputRef} accept="image/*" className="hidden" onChange={handleProfileLogoFileChange} type="file" />
-                <div className="lg:col-span-2 grid gap-5 md:grid-cols-[180px_minmax(0,1fr)]">
-                  <button className="flex min-h-[180px] items-center justify-center overflow-hidden rounded-[24px] border border-dashed border-slate-300 bg-slate-50 text-slate-500 transition hover:border-sky-400 hover:bg-sky-50" onClick={() => profileLogoInputRef.current?.click()} type="button">
-                    {profileLogoPreview ? <img alt="Profile logo preview" className="h-full w-full object-cover" src={profileLogoPreview} /> : <span className="px-6 text-center text-sm font-medium">Upload logo</span>}
-                  </button>
-                  <div className="space-y-3">
-                    <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">Profile logo</p>
-                    <p className="text-sm leading-6 text-slate-500 dark:text-slate-400">
-                      Upload a square logo or avatar. It will appear next to your name in the public profile.
-                    </p>
-                    {profileLogoFile ? <p className="text-sm font-medium text-slate-700 dark:text-slate-300">{profileLogoFile.name}</p> : null}
-                    <button className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-950 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:border-slate-600 dark:hover:bg-slate-900 dark:hover:text-slate-100" onClick={() => profileLogoInputRef.current?.click()} type="button">
-                      Choose image
-                    </button>
-                  </div>
-                </div>
-                <label className="space-y-2 lg:col-span-2">
-                  <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Display name</span>
-                  <input className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:focus:ring-sky-500/20" name="display_name" onChange={handleProfileInputChange} placeholder="Ethan Hunt" type="text" value={profileForm.display_name} />
-                </label>
-                <label className="space-y-2 lg:col-span-2">
-                  <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Bio</span>
-                  <textarea className="min-h-32 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:focus:ring-sky-500/20" name="bio" onChange={handleProfileInputChange} placeholder="Tell people what you build and who it is for." rows="5" value={profileForm.bio} />
-                </label>
-                <div className="lg:col-span-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  {profileSaveMessage ? (
-                    <div className={`rounded-2xl px-4 py-3 text-sm font-medium ${
-                      profileSaveStatus === "error"
-                        ? "bg-rose-50 text-rose-700 ring-1 ring-rose-200"
-                        : "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200"
-                    }`}>
-                      {profileSaveMessage}
-                    </div>
-                  ) : <div />}
-                  <button className="inline-flex items-center justify-center rounded-full bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-sky-600 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-sky-500 dark:hover:bg-sky-400" disabled={profileSaveStatus === "saving"} type="submit">
-                    {profileSaveStatus === "saving" ? "Saving..." : "Save profile"}
-                  </button>
-                </div>
-              </form>
-            </Surface>
-          </div>
-        </div>
-      ) : null}
+      {profileEditorModal}
     </section>
   );
 }
