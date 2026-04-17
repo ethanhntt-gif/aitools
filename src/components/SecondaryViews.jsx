@@ -3,6 +3,124 @@ import { createPortal } from "react-dom";
 import { ArrowUpRightIcon, EyeIcon, PenIcon, RefreshIcon, SearchIcon, TrashIcon } from "./icons";
 import { EmptyState, SectionIntro, StatCard, SuccessOverlay, Surface, ToolCard } from "./ui";
 
+function renderInlineMarkdown(text) {
+  const matches = Array.from(text.matchAll(/\[([^\]]+)\]\(([^)]+)\)/g));
+
+  if (!matches.length) {
+    return text;
+  }
+
+  const parts = [];
+  let lastIndex = 0;
+
+  matches.forEach((match, index) => {
+    const [fullMatch, label, href] = match;
+    const matchIndex = match.index ?? 0;
+
+    if (matchIndex > lastIndex) {
+      parts.push(text.slice(lastIndex, matchIndex));
+    }
+
+    parts.push(
+      <a
+        className="font-medium text-sky-600 underline decoration-sky-200 underline-offset-4 transition hover:text-sky-500 dark:text-sky-400 dark:decoration-sky-500/40 dark:hover:text-sky-300"
+        href={href}
+        key={`${href}-${index}`}
+        rel={href.startsWith("http") ? "noreferrer" : undefined}
+        target={href.startsWith("http") ? "_blank" : undefined}
+      >
+        {label || fullMatch}
+      </a>
+    );
+
+    lastIndex = matchIndex + fullMatch.length;
+  });
+
+  if (lastIndex < text.length) {
+    parts.push(text.slice(lastIndex));
+  }
+
+  return parts;
+}
+
+function parseMarkdownDocument(content) {
+  const lines = content.split(/\r?\n/);
+  const blocks = [];
+  let paragraphLines = [];
+  let listItems = [];
+
+  const flushParagraph = () => {
+    if (!paragraphLines.length) {
+      return;
+    }
+
+    blocks.push({
+      type: "paragraph",
+      text: paragraphLines.join(" ")
+    });
+    paragraphLines = [];
+  };
+
+  const flushList = () => {
+    if (!listItems.length) {
+      return;
+    }
+
+    blocks.push({
+      type: "list",
+      items: [...listItems]
+    });
+    listItems = [];
+  };
+
+  lines.forEach((line) => {
+    const trimmedLine = line.trim();
+
+    if (!trimmedLine) {
+      flushParagraph();
+      flushList();
+      return;
+    }
+
+    if (trimmedLine.startsWith("# ")) {
+      flushParagraph();
+      flushList();
+      blocks.push({
+        type: "title",
+        text: trimmedLine.slice(2).trim()
+      });
+      return;
+    }
+
+    if (trimmedLine.startsWith("## ")) {
+      flushParagraph();
+      flushList();
+      blocks.push({
+        type: "heading",
+        text: trimmedLine.slice(3).trim()
+      });
+      return;
+    }
+
+    if (trimmedLine.startsWith("* ")) {
+      flushParagraph();
+      listItems.push(trimmedLine.slice(2).trim());
+      return;
+    }
+
+    if (listItems.length) {
+      flushList();
+    }
+
+    paragraphLines.push(trimmedLine);
+  });
+
+  flushParagraph();
+  flushList();
+
+  return blocks;
+}
+
 function formatAuthorName(ownerEmail) {
   if (!ownerEmail) {
     return "Unknown author";
@@ -487,7 +605,7 @@ export function ProjectView({
           </Surface>
           <div className="space-y-6">
             <Surface className="p-6"><p className="text-xs font-semibold uppercase tracking-[0.28em] text-sky-600">Author</p><button className="mt-4 flex w-full items-center gap-4 rounded-[22px] border border-slate-200 bg-white px-4 py-4 text-left transition hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:hover:border-slate-600 dark:hover:bg-slate-900" onClick={() => openAuthorProfile(activeProject.owner_id)} type="button"><div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-[22px] border border-slate-200 bg-[linear-gradient(135deg,_#0f172a_0%,_#0369a1_100%)] text-xl font-semibold text-white shadow-sm dark:border-slate-700">{activeAuthorProfile?.avatar_url ? <img alt={activeAuthorProfile.display_name} className="h-full w-full object-cover" src={activeAuthorProfile.avatar_url} /> : getAuthorInitial(activeProject.owner_email)}</div><div className="min-w-0"><p className="text-lg font-semibold text-slate-950 dark:text-slate-100">{activeAuthorProfile?.display_name || formatAuthorName(activeProject.owner_email)}</p><p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{activeAuthorProfile?.headline || "Open author profile"}</p></div></button></Surface>
-            <Surface className="p-6"><p className="text-xs font-semibold uppercase tracking-[0.28em] text-sky-600">Visit project</p><a className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-full bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-sky-600" href={activeProject.project_url || "#"} target="_blank" rel="noreferrer">Open live site<ArrowUpRightIcon className="h-4 w-4" /></a></Surface>
+            <Surface className="p-6"><p className="text-xs font-semibold uppercase tracking-[0.28em] text-sky-600">Visit project</p><a className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-full bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-sky-600" href={activeProject.project_url || "#"} target="_blank" rel="noreferrer">Visit website<ArrowUpRightIcon className="h-4 w-4" /></a></Surface>
           </div>
         </div>
       ) : <EmptyState>Project not found. Try going back to the homepage and opening it again.</EmptyState>}
@@ -511,6 +629,68 @@ export function CategoryView({ activeCategoryName, categoryProjects, categoryCou
           </div>
         </Surface>
       </div>
+    </section>
+  );
+}
+
+export function LegalPageView({ title, documentContent, openHome }) {
+  const blocks = parseMarkdownDocument(documentContent || "");
+  const pageTitle = blocks.find((block) => block.type === "title")?.text || title;
+  const contentBlocks = blocks.filter((block) => block.type !== "title");
+
+  return (
+    <section className="space-y-8">
+      <SectionIntro
+        eyebrow="Legal"
+        title={pageTitle}
+        description="Important information about how this site operates and how your data is handled."
+        action={
+          <button
+            className="inline-flex items-center justify-center rounded-full border border-slate-200 px-5 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white dark:border-slate-700 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-900 dark:hover:text-slate-100"
+            onClick={openHome}
+            type="button"
+          >
+            Back to weekly launch
+          </button>
+        }
+      />
+      <Surface className="overflow-hidden shadow-[0_16px_40px_-34px_rgba(15,23,42,0.18)]">
+        <div className="bg-[linear-gradient(135deg,_rgba(248,250,252,0.98)_0%,_rgba(241,245,249,0.94)_52%,_rgba(186,230,253,0.88)_100%)] px-6 py-8 dark:bg-[linear-gradient(135deg,_rgba(2,6,23,1)_0%,_rgba(15,23,42,0.98)_52%,_rgba(3,105,161,0.7)_100%)] sm:px-8">
+          <p className="text-sm uppercase tracking-[0.28em] text-slate-500 dark:text-slate-400">Legal document</p>
+          <h2 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950 dark:text-slate-100 sm:text-4xl">{pageTitle}</h2>
+        </div>
+        <div className="px-6 py-8 sm:px-8">
+          <div className="mx-auto max-w-4xl space-y-6 text-base leading-8 text-slate-600 dark:text-slate-300">
+            {contentBlocks.map((block, index) => {
+              if (block.type === "heading") {
+                return (
+                  <h3 className="pt-2 text-2xl font-semibold tracking-tight text-slate-950 dark:text-slate-100" key={`${block.type}-${index}`}>
+                    {block.text}
+                  </h3>
+                );
+              }
+
+              if (block.type === "list") {
+                return (
+                  <ul className="space-y-3 pl-6" key={`${block.type}-${index}`}>
+                    {block.items.map((item, itemIndex) => (
+                      <li className="list-disc marker:text-sky-500" key={`${item}-${itemIndex}`}>
+                        {renderInlineMarkdown(item)}
+                      </li>
+                    ))}
+                  </ul>
+                );
+              }
+
+              return (
+                <p key={`${block.type}-${index}`}>
+                  {renderInlineMarkdown(block.text)}
+                </p>
+              );
+            })}
+          </div>
+        </div>
+      </Surface>
     </section>
   );
 }

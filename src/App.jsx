@@ -2,9 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { hasSupabaseCredentials, supabase } from "./lib/supabase";
 import HomeView from "./components/HomeView";
 import { MoonIcon, SparklesIcon, SunIcon } from "./components/icons";
-import { CategoryView, DashboardView, ProjectView, ProjectsView } from "./components/SecondaryViews";
+import { CategoryView, DashboardView, LegalPageView, ProjectView, ProjectsView } from "./components/SecondaryViews";
 import SubmitModal from "./components/SubmitModal";
 import { Surface, ToastStack } from "./components/ui";
+import privacyPolicyContent from "../Privacy Policy.md?raw";
+import termsOfServiceContent from "../Terms of Service.md?raw";
 
 const initialForm = {
   title: "",
@@ -1083,6 +1085,26 @@ function App() {
         return;
       }
 
+      if (path === "/terms") {
+        setActiveView("terms");
+        setActiveSlug("");
+        setActivePreviewId("");
+        setActiveAuthorId("");
+        setActiveCategorySlug("");
+        setHomeCategoryFilterSlug("");
+        return;
+      }
+
+      if (path === "/privacy") {
+        setActiveView("privacy");
+        setActiveSlug("");
+        setActivePreviewId("");
+        setActiveAuthorId("");
+        setActiveCategorySlug("");
+        setHomeCategoryFilterSlug("");
+        return;
+      }
+
       if (path.startsWith("/project/")) {
         setActiveView("project");
         setActiveSlug(decodeURIComponent(path.replace("/project/", "")));
@@ -1713,6 +1735,28 @@ function App() {
     setIsMenuOpen(false);
   }
 
+  function openTermsPage() {
+    window.history.pushState({}, "", "/terms");
+    setActiveView("terms");
+    setActiveSlug("");
+    setActivePreviewId("");
+    setActiveAuthorId("");
+    setActiveCategorySlug("");
+    setHomeCategoryFilterSlug("");
+    setIsMenuOpen(false);
+  }
+
+  function openPrivacyPage() {
+    window.history.pushState({}, "", "/privacy");
+    setActiveView("privacy");
+    setActiveSlug("");
+    setActivePreviewId("");
+    setActiveAuthorId("");
+    setActiveCategorySlug("");
+    setHomeCategoryFilterSlug("");
+    setIsMenuOpen(false);
+  }
+
   function openProject(project) {
     const projectSlug = slugify(project.title);
     window.history.pushState({}, "", `/project/${projectSlug}`);
@@ -2236,6 +2280,18 @@ function App() {
               openCategoryPage={openCategoryPage}
               getProjectCategories={getProjectCategories}
             />
+          ) : activeView === "terms" ? (
+            <LegalPageView
+              title="Terms of Service"
+              documentContent={termsOfServiceContent}
+              openHome={openHome}
+            />
+          ) : activeView === "privacy" ? (
+            <LegalPageView
+              title="Privacy Policy"
+              documentContent={privacyPolicyContent}
+              openHome={openHome}
+            />
           ) : (
             <HomeView
               status={status}
@@ -2270,6 +2326,8 @@ function App() {
                 <button className="transition hover:text-slate-950 dark:hover:text-slate-100" onClick={openHome} type="button">Browse</button>
                 <button className="transition hover:text-slate-950 dark:hover:text-slate-100" onClick={openProjectsPage} type="button">All Projects</button>
                 <button className="transition hover:text-slate-950 dark:hover:text-slate-100" onClick={openSubmitFlow} type="button">Submit</button>
+                <button className="transition hover:text-slate-950 dark:hover:text-slate-100" onClick={openTermsPage} type="button">Terms of Service</button>
+                <button className="transition hover:text-slate-950 dark:hover:text-slate-100" onClick={openPrivacyPage} type="button">Privacy Policy</button>
               </div>
             </div>
             <div className="mt-8 border-t border-slate-200 pt-6 text-sm text-slate-500 dark:border-slate-800 dark:text-slate-400">
