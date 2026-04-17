@@ -527,6 +527,7 @@ function App() {
   const screenshotInputRef = useRef(null);
   const profileLogoInputRef = useRef(null);
   const categoryMenuRef = useRef(null);
+  const userMenuRef = useRef(null);
   const hasLoadedCachedProjectsRef = useRef(false);
   const previousMyProjectsRef = useRef([]);
 
@@ -1133,11 +1134,16 @@ function App() {
       if (!categoryMenuRef.current?.contains(event.target)) {
         setIsCategoryMenuOpen(false);
       }
+
+      if (!userMenuRef.current?.contains(event.target)) {
+        setIsMenuOpen(false);
+      }
     }
 
     function handleEscape(event) {
       if (event.key === "Escape") {
         setIsCategoryMenuOpen(false);
+        setIsMenuOpen(false);
       }
     }
 
@@ -2099,7 +2105,7 @@ function App() {
                 </button>
                 {hasSupabaseCredentials ? (
                   session ? (
-                    <div className="relative">
+                    <div className="relative" ref={userMenuRef}>
                       <button
                         className="flex items-center gap-3 rounded-full border border-slate-200 bg-white px-3 py-2 text-left transition hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-slate-600"
                         onClick={toggleMenu}
@@ -2212,6 +2218,7 @@ function App() {
               openHome={openHome}
               openCategoryPage={openCategoryPage}
               openAuthorProfile={openAuthorProfile}
+              getProjectCategories={getProjectCategories}
             />
           ) : activeView === "category" ? (
             <CategoryView

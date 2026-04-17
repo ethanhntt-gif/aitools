@@ -29,10 +29,6 @@ export default function SubmitModal({
   handleNextStep,
   handleProjectSubmit
 }) {
-  if (!isOpen) {
-    return null;
-  }
-
   const [showAllLaunchSlots, setShowAllLaunchSlots] = useState(false);
   const selectedCategoryNames = formData.category
     .map((categoryId) => categoryOptions.find((option) => option.id === categoryId)?.name)
@@ -56,6 +52,28 @@ export default function SubmitModal({
       setShowAllLaunchSlots(false);
     }
   }, [isOpen, modalStep]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      document.body.style.overflow = "";
+      document.documentElement.style.overflow = "";
+      return undefined;
+    }
+
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousHtmlOverflow = document.documentElement.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousBodyOverflow || "";
+      document.documentElement.style.overflow = previousHtmlOverflow || "";
+    };
+  }, [isOpen]);
+
+  if (!isOpen) {
+    return null;
+  }
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/55 px-4 py-10 backdrop-blur-sm" role="presentation">
