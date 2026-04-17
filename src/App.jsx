@@ -13,6 +13,7 @@ const initialForm = {
   slogan: "",
   description: "",
   category: [],
+  pricing_model: "",
   project_url: "",
   image_url: "",
   logo_url: "",
@@ -59,6 +60,8 @@ const defaultCategoryNames = [
   "Other"
 ];
 
+const pricingModelOptions = ["free", "freemium", "paid"];
+
 function slugify(value) {
   return value
     .toLowerCase()
@@ -77,6 +80,11 @@ function normalizeNumericId(value) {
   }
 
   return value;
+}
+
+function normalizePricingModel(value) {
+  const normalizedValue = String(value || "").trim().toLowerCase();
+  return pricingModelOptions.includes(normalizedValue) ? normalizedValue : "";
 }
 
 function getCategoryList(categoryValue) {
@@ -160,6 +168,7 @@ function isCategoryMigrationMissing(error) {
   const message = error?.message?.toLowerCase() || "";
 
   return (
+    message.includes("'category' column") ||
     message.includes("project_categories") ||
     message.includes("categories") ||
     message.includes("relationship") ||
@@ -173,6 +182,12 @@ function isLaunchScheduleMigrationMissing(error) {
   return (
     message.includes("launch_week")
   );
+}
+
+function isPricingMigrationMissing(error) {
+  const message = error?.message?.toLowerCase() || "";
+
+  return message.includes("pricing_model");
 }
 
 function isVotingMigrationMissing(error) {
@@ -402,6 +417,7 @@ function normalizeProject(project) {
     created_at: project?.created_at || null,
     launch_week: project?.launch_week ? Number(project.launch_week) : null,
     launch_date: project?.launch_date || getLaunchDateValueFromWeek(project?.launch_week) || "",
+    pricing_model: normalizePricingModel(project?.pricing_model),
     vote_count: Number(project?.vote_count) || 0
   };
 }
@@ -414,6 +430,7 @@ const demoProjects = [
     slogan: "Prospecting and follow-ups on autopilot.",
     description: "Automates prospect research, drafts outreach, and tracks conversations.",
     category: "Automation",
+    pricing_model: "freemium",
     owner_email: "alex@aitools.dev",
     project_url: "#",
     image_url:
@@ -430,6 +447,7 @@ const demoProjects = [
     slogan: "From brief to launch-ready content in minutes.",
     description: "Turns briefs into social posts, blog outlines, and campaign assets in minutes.",
     category: "Content",
+    pricing_model: "paid",
     owner_email: "maya@aitools.dev",
     project_url: "#",
     image_url:
@@ -446,6 +464,7 @@ const demoProjects = [
     slogan: "Faster replies, calmer queues, better support.",
     description: "Suggests support replies, summarizes tickets, and surfaces urgent issues.",
     category: "Customer Care",
+    pricing_model: "free",
     owner_email: "ethan@aitools.dev",
     project_url: "#",
     image_url:
@@ -523,12 +542,14 @@ function App() {
   const [visibleProjectsCount, setVisibleProjectsCount] = useState(initialVisibleProjectsCount);
   const [modalStep, setModalStep] = useState(1);
   const [isCategoryMenuOpen, setIsCategoryMenuOpen] = useState(false);
+  const [isPricingMenuOpen, setIsPricingMenuOpen] = useState(false);
   const [logoFile, setLogoFile] = useState(null);
   const [screenshotFile, setScreenshotFile] = useState(null);
   const logoInputRef = useRef(null);
   const screenshotInputRef = useRef(null);
   const profileLogoInputRef = useRef(null);
   const categoryMenuRef = useRef(null);
+  const pricingMenuRef = useRef(null);
   const userMenuRef = useRef(null);
   const hasLoadedCachedProjectsRef = useRef(false);
   const previousMyProjectsRef = useRef([]);
@@ -879,7 +900,7 @@ function App() {
 
     let { data, error } = await supabase
       .from("projects")
-      .select("id, title, slogan, description, project_url, image_url, logo_url, owner_id, owner_email, created_at, published, deleted, launch_week, launch_date, project_categories(category:categories(id, name, slug))")
+      .select("id, title, slogan, description, pricing_model, project_url, image_url, logo_url, owner_id, owner_email, created_at, published, deleted, launch_week, launch_date, project_categories(category:categories(id, name, slug))")
       .eq("published", true)
       .eq("deleted", false)
       .order("created_at", { ascending: false });
@@ -890,7 +911,8 @@ function App() {
         error.message?.toLowerCase().includes("published") ||
         error.message?.toLowerCase().includes("deleted") ||
         isCategoryMigrationMissing(error) ||
-        isLaunchScheduleMigrationMissing(error)
+        isLaunchScheduleMigrationMissing(error) ||
+        isPricingMigrationMissing(error)
       )
     ) {
       const fallbackResponse = await supabase
@@ -930,7 +952,7 @@ function App() {
 
     let { data, error } = await supabase
       .from("projects")
-      .select("id, title, slogan, description, project_url, image_url, logo_url, owner_id, owner_email, created_at, published, deleted, launch_week, launch_date, project_categories(category:categories(id, name, slug))")
+      .select("id, title, slogan, description, pricing_model, project_url, image_url, logo_url, owner_id, owner_email, created_at, published, deleted, launch_week, launch_date, project_categories(category:categories(id, name, slug))")
       .eq("owner_id", activeSession.user.id)
       .order("created_at", { ascending: false });
 
@@ -940,7 +962,8 @@ function App() {
         error.message?.toLowerCase().includes("published") ||
         error.message?.toLowerCase().includes("deleted") ||
         isCategoryMigrationMissing(error) ||
-        isLaunchScheduleMigrationMissing(error)
+        isLaunchScheduleMigrationMissing(error) ||
+        isPricingMigrationMissing(error)
       )
     ) {
       const fallbackResponse = await supabase
@@ -1157,6 +1180,10 @@ function App() {
         setIsCategoryMenuOpen(false);
       }
 
+      if (!pricingMenuRef.current?.contains(event.target)) {
+        setIsPricingMenuOpen(false);
+      }
+
       if (!userMenuRef.current?.contains(event.target)) {
         setIsMenuOpen(false);
       }
@@ -1165,6 +1192,7 @@ function App() {
     function handleEscape(event) {
       if (event.key === "Escape") {
         setIsCategoryMenuOpen(false);
+        setIsPricingMenuOpen(false);
         setIsMenuOpen(false);
       }
     }
@@ -1286,6 +1314,12 @@ function App() {
 
   function toggleCategoryMenu() {
     setIsCategoryMenuOpen((current) => !current);
+    setIsPricingMenuOpen(false);
+  }
+
+  function togglePricingMenu() {
+    setIsPricingMenuOpen((current) => !current);
+    setIsCategoryMenuOpen(false);
   }
 
   function selectCategory(categoryOption) {
@@ -1312,11 +1346,27 @@ function App() {
     });
   }
 
+  function selectPricingModel(pricingModel) {
+    setSubmitStatus("idle");
+    setSubmitMessage("");
+    setFormData((current) => ({
+      ...current,
+      pricing_model: pricingModel
+    }));
+    setIsPricingMenuOpen(false);
+  }
+
   function validateModalStep(step) {
     if (step === 1) {
       if (!formData.title.trim() || !formData.category.length || !formData.description.trim()) {
         setSubmitStatus("error");
         setSubmitMessage("Fill in the project title, choose at least one category, and add a description.");
+        return false;
+      }
+
+      if (!normalizePricingModel(formData.pricing_model)) {
+        setSubmitStatus("error");
+        setSubmitMessage("Choose a pricing model: Free, Freemium, or Paid.");
         return false;
       }
 
@@ -1417,6 +1467,7 @@ function App() {
       slogan: formData.slogan.trim(),
       description: formData.description.trim(),
       category: getSelectedCategoryNames(formData.category, categoryOptions).join(", "),
+      pricing_model: normalizePricingModel(formData.pricing_model),
       project_url: formData.project_url.trim(),
       image_url: nextImageUrl,
       logo_url: nextLogoUrl,
@@ -1425,17 +1476,37 @@ function App() {
       owner_email: session.user.email
     };
 
-    const projectQuery = editingProject
-      ? supabase.from("projects").update(payload).eq("id", editingProject.id).select("id").single()
-      : supabase.from("projects").insert(payload).select("id").single();
+    const runProjectSave = async (nextPayload) => (
+      editingProject
+        ? supabase.from("projects").update(nextPayload).eq("id", editingProject.id).select("id").single()
+        : supabase.from("projects").insert(nextPayload).select("id").single()
+    );
 
-    const { data: savedProject, error } = await projectQuery;
+    let { data: savedProject, error } = await runProjectSave(payload);
+
+    if (error && (isPricingMigrationMissing(error) || isCategoryMigrationMissing(error))) {
+      const fallbackPayload = { ...payload };
+
+      if (isPricingMigrationMissing(error)) {
+        delete fallbackPayload.pricing_model;
+      }
+
+      if (isCategoryMigrationMissing(error)) {
+        delete fallbackPayload.category;
+      }
+
+      ({ data: savedProject, error } = await runProjectSave(fallbackPayload));
+    }
 
     if (error) {
       setSubmitStatus("error");
       setSubmitMessage(
         isLaunchScheduleMigrationMissing(error)
           ? "Project save failed because the `launch_week` column is missing. Run the latest `supabase/projects.sql` migration."
+          : isCategoryMigrationMissing(error)
+            ? "Project save failed because the legacy `category` column is missing. Run the latest `supabase/projects.sql` migration."
+          : isPricingMigrationMissing(error)
+            ? "Project save failed because the `pricing_model` column is missing. Run the latest `supabase/projects.sql` migration."
           : editingProject
             ? "Project update failed. Add Supabase RLS update policy for the owner."
             : "Project submission failed. Check the `projects` table schema and Supabase RLS insert policy."
@@ -1583,6 +1654,7 @@ function App() {
     setSubmitMessage("");
     setModalStep(1);
     setIsCategoryMenuOpen(false);
+    setIsPricingMenuOpen(false);
     setIsMenuOpen(false);
     setEditingProject(null);
     setFormData(initialForm);
@@ -1596,6 +1668,7 @@ function App() {
     setSubmitMessage("");
     setModalStep(1);
     setIsCategoryMenuOpen(false);
+    setIsPricingMenuOpen(false);
     setIsMenuOpen(false);
     setEditingProject(project);
     setFormData({
@@ -1605,6 +1678,7 @@ function App() {
       category: getProjectCategoryIds(project).length
         ? getProjectCategoryIds(project)
         : [],
+      pricing_model: normalizePricingModel(project.pricing_model),
       project_url: project.project_url || "",
       image_url: project.image_url || "",
       logo_url: project.logo_url || "",
@@ -1620,6 +1694,7 @@ function App() {
     setSubmitStatus("idle");
     setSubmitMessage("");
     setIsCategoryMenuOpen(false);
+    setIsPricingMenuOpen(false);
     setEditingProject(null);
     setFormData(initialForm);
     setLogoFile(null);
@@ -2268,6 +2343,7 @@ function App() {
               openCategoryPage={openCategoryPage}
               openAuthorProfile={openAuthorProfile}
               getProjectCategories={getProjectCategories}
+              openSubmitFlow={openSubmitFlow}
             />
           ) : activeView === "category" ? (
             <CategoryView
@@ -2352,6 +2428,10 @@ function App() {
         categoryMenuRef={categoryMenuRef}
         toggleCategoryMenu={toggleCategoryMenu}
         selectCategory={selectCategory}
+        isPricingMenuOpen={isPricingMenuOpen}
+        pricingMenuRef={pricingMenuRef}
+        togglePricingMenu={togglePricingMenu}
+        selectPricingModel={selectPricingModel}
         handleInputChange={handleInputChange}
         launchSlotOptions={launchSlotOptions}
         launchYear={launchYear}

@@ -16,6 +16,10 @@ export default function SubmitModal({
   categoryMenuRef,
   toggleCategoryMenu,
   selectCategory,
+  isPricingMenuOpen,
+  pricingMenuRef,
+  togglePricingMenu,
+  selectPricingModel,
   handleInputChange,
   launchSlotOptions,
   launchYear,
@@ -33,6 +37,12 @@ export default function SubmitModal({
   const selectedCategoryNames = formData.category
     .map((categoryId) => categoryOptions.find((option) => option.id === categoryId)?.name)
     .filter(Boolean);
+  const pricingLabelMap = {
+    free: "Free",
+    freemium: "Freemium",
+    paid: "Paid"
+  };
+  const selectedPricingLabel = pricingLabelMap[formData.pricing_model] || "";
   const launchWeekNumber = Number(formData.launch_week);
   const visibleLaunchSlots = showAllLaunchSlots
     ? launchSlotOptions
@@ -146,6 +156,69 @@ export default function SubmitModal({
                   </label>
 
                   <label className="space-y-2 sm:col-span-1">
+                    <span className="text-sm font-semibold text-slate-700">Project URL</span>
+                    <input
+                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
+                      name="project_url"
+                      value={formData.project_url}
+                      onChange={handleInputChange}
+                      placeholder="https://your-project.com"
+                      type="url"
+                    />
+                  </label>
+
+                  <label className="space-y-2 sm:col-span-1">
+                    <span className="text-sm font-semibold text-slate-700">Pricing</span>
+                    <div className="relative" ref={pricingMenuRef}>
+                      <button
+                        aria-expanded={isPricingMenuOpen}
+                        aria-haspopup="listbox"
+                        className={`flex w-full items-center justify-between rounded-2xl border bg-white px-4 py-3 text-left text-sm transition ${
+                          isPricingMenuOpen
+                            ? "border-sky-400 ring-4 ring-sky-100"
+                            : "border-slate-200 hover:border-slate-300"
+                        }`}
+                        onClick={togglePricingMenu}
+                        type="button"
+                      >
+                        <span className={selectedPricingLabel ? "text-slate-900" : "text-slate-400"}>
+                          {selectedPricingLabel || "Choose pricing"}
+                        </span>
+                        <span className="text-slate-400">{isPricingMenuOpen ? "-" : "+"}</span>
+                      </button>
+                      {isPricingMenuOpen ? (
+                        <Surface className="absolute left-0 right-0 top-[calc(100%+12px)] z-10 p-2">
+                          <div className="space-y-1" role="listbox" aria-label="Pricing options">
+                            {Object.entries(pricingLabelMap).map(([pricingValue, pricingLabel]) => {
+                              const isSelected = formData.pricing_model === pricingValue;
+
+                              return (
+                                <button
+                                  key={pricingValue}
+                                  className={`flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left text-sm transition ${
+                                    isSelected
+                                      ? "bg-sky-50 text-sky-700"
+                                      : "text-slate-600 hover:bg-slate-50"
+                                  }`}
+                                  onClick={() => selectPricingModel(pricingValue)}
+                                  aria-selected={isSelected}
+                                  role="option"
+                                  type="button"
+                                >
+                                  <span className="flex h-5 w-5 items-center justify-center rounded-full border border-current/20 text-xs">
+                                    {isSelected ? "x" : ""}
+                                  </span>
+                                  {pricingLabel}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </Surface>
+                      ) : null}
+                    </div>
+                  </label>
+
+                  <label className="space-y-2 sm:col-span-1">
                     <span className="text-sm font-semibold text-slate-700">Category</span>
                     <div className="relative" ref={categoryMenuRef}>
                       <button
@@ -227,18 +300,6 @@ export default function SubmitModal({
                       onChange={handleInputChange}
                       placeholder="Describe what your project does and why it matters."
                       rows="5"
-                    />
-                  </label>
-
-                  <label className="space-y-2 sm:col-span-2">
-                    <span className="text-sm font-semibold text-slate-700">Project URL</span>
-                    <input
-                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
-                      name="project_url"
-                      value={formData.project_url}
-                      onChange={handleInputChange}
-                      placeholder="https://your-project.com"
-                      type="url"
                     />
                   </label>
                 </div>

@@ -3,6 +3,7 @@ create table if not exists public.projects (
   title text not null,
   slogan text,
   description text not null,
+  pricing_model text,
   project_url text not null,
   owner_id uuid not null,
   owner_email text,
@@ -25,6 +26,9 @@ add column if not exists deleted boolean not null default false;
 
 alter table public.projects
 add column if not exists category text;
+
+alter table public.projects
+add column if not exists pricing_model text;
 
 alter table public.projects
 add column if not exists launch_week integer;

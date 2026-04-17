@@ -580,8 +580,22 @@ export function ProjectView({
   openHome,
   openCategoryPage,
   openAuthorProfile,
-  getProjectCategories
+  getProjectCategories,
+  openSubmitFlow
 }) {
+  const pricingModelLabelMap = {
+    free: "Free",
+    freemium: "Freemium",
+    paid: "Paid"
+  };
+  const pricingModelToneMap = {
+    free: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300",
+    freemium: "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-300",
+    paid: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300"
+  };
+  const pricingModel = String(activeProject?.pricing_model || "").toLowerCase();
+  const pricingLabel = pricingModelLabelMap[pricingModel] || "";
+
   return (
     <section className="space-y-8">
       {activeProject ? (
@@ -592,10 +606,11 @@ export function ProjectView({
               {isPreview ? <div className="inline-flex items-center rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700 ring-1 ring-amber-200">Private preview</div> : null}
               <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
                 {activeProject.logo_url ? <img className="h-20 w-20 rounded-3xl border border-slate-200 object-cover" src={activeProject.logo_url} alt={activeProject.title} /> : null}
-                <div className="space-y-3">
-                  <div className="flex flex-wrap gap-2">
+                 <div className="space-y-3">
+                   <div className="flex flex-wrap gap-2">
+                    {pricingLabel ? <span className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] ${pricingModelToneMap[pricingModel]}`}>{pricingLabel}</span> : null}
                     {getProjectCategories(activeProject).map((categoryItem) => <button className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600 transition hover:bg-slate-200" key={categoryItem} onClick={() => openCategoryPage(categoryItem)} type="button">{categoryItem}</button>)}
-                  </div>
+                   </div>
                   <h3 className="text-3xl font-semibold tracking-tight text-slate-950">{activeProject.title}</h3>
                   {activeProject.slogan ? <p className="text-lg leading-8 text-slate-600">{activeProject.slogan}</p> : null}
                 </div>
@@ -606,6 +621,16 @@ export function ProjectView({
           <div className="space-y-6">
             <Surface className="p-6"><p className="text-xs font-semibold uppercase tracking-[0.28em] text-sky-600">Author</p><button className="mt-4 flex w-full items-center gap-4 rounded-[22px] border border-slate-200 bg-white px-4 py-4 text-left transition hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:hover:border-slate-600 dark:hover:bg-slate-900" onClick={() => openAuthorProfile(activeProject.owner_id)} type="button"><div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-[22px] border border-slate-200 bg-[linear-gradient(135deg,_#0f172a_0%,_#0369a1_100%)] text-xl font-semibold text-white shadow-sm dark:border-slate-700">{activeAuthorProfile?.avatar_url ? <img alt={activeAuthorProfile.display_name} className="h-full w-full object-cover" src={activeAuthorProfile.avatar_url} /> : getAuthorInitial(activeProject.owner_email)}</div><div className="min-w-0"><p className="text-lg font-semibold text-slate-950 dark:text-slate-100">{activeAuthorProfile?.display_name || formatAuthorName(activeProject.owner_email)}</p><p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{activeAuthorProfile?.headline || "Open author profile"}</p></div></button></Surface>
             <Surface className="p-6"><p className="text-xs font-semibold uppercase tracking-[0.28em] text-sky-600">Visit project</p><a className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-full bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-sky-600" href={activeProject.project_url || "#"} target="_blank" rel="noreferrer">Visit website<ArrowUpRightIcon className="h-4 w-4" /></a></Surface>
+            <Surface className="overflow-hidden">
+              <div className="bg-[linear-gradient(135deg,_rgba(248,250,252,0.98)_0%,_rgba(241,245,249,0.94)_52%,_rgba(186,230,253,0.88)_100%)] p-6 dark:bg-[linear-gradient(135deg,_rgba(2,6,23,1)_0%,_rgba(15,23,42,0.98)_52%,_rgba(3,105,161,0.7)_100%)]">
+                <p className="text-xs font-semibold uppercase tracking-[0.28em] text-sky-600 dark:text-sky-400">Launch your own</p>
+                <h3 className="mt-3 text-2xl font-semibold tracking-tight text-slate-950 dark:text-slate-100">Submit your project</h3>
+                <p className="mt-3 text-sm leading-7 text-slate-600 dark:text-slate-300">Share your AI tool on the weekly board and get it in front of new visitors.</p>
+                <button className="mt-5 inline-flex w-full items-center justify-center rounded-full bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-sky-600 dark:bg-white dark:text-slate-950 dark:hover:bg-sky-50" onClick={openSubmitFlow} type="button">
+                  Submit project
+                </button>
+              </div>
+            </Surface>
           </div>
         </div>
       ) : <EmptyState>Project not found. Try going back to the homepage and opening it again.</EmptyState>}

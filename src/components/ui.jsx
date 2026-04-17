@@ -75,6 +75,19 @@ export function ToolCard({
   onOpenProject,
   onOpenCategoryPage
 }) {
+  const pricingModelLabelMap = {
+    free: "Free",
+    freemium: "Freemium",
+    paid: "Paid"
+  };
+  const pricingModelToneMap = {
+    free: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300",
+    freemium: "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-300",
+    paid: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300"
+  };
+  const pricingModel = String(project?.pricing_model || "").toLowerCase();
+  const pricingLabel = pricingModelLabelMap[pricingModel] || "";
+
   return (
     <Surface className="group flex h-full flex-col overflow-hidden transition duration-300 hover:-translate-y-1 hover:shadow-[0_26px_80px_-45px_rgba(15,23,42,0.35)]">
       <div className="border-b border-slate-200/80 bg-[linear-gradient(180deg,_#f8fbff_0%,_#eef6ff_100%)] p-5 dark:border-slate-800/80 dark:bg-[linear-gradient(180deg,_rgba(15,23,42,0.95)_0%,_rgba(30,41,59,0.95)_100%)]">
@@ -98,6 +111,13 @@ export function ToolCard({
             </div>
           </div>
           <div className="mt-4 flex h-[64px] flex-wrap content-start gap-2 overflow-hidden">
+            {pricingLabel ? (
+              <span
+                className={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] ${pricingModelToneMap[pricingModel]}`}
+              >
+                {pricingLabel}
+              </span>
+            ) : null}
             {categories.map((categoryItem) => (
               <button
                 className="rounded-full bg-white px-3 py-1 text-[11px] font-medium text-slate-700 ring-1 ring-slate-200 transition hover:bg-slate-50 dark:bg-slate-950 dark:text-slate-300 dark:ring-slate-700 dark:hover:bg-slate-900"
