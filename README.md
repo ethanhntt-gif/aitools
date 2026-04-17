@@ -64,7 +64,6 @@ Routing is handled manually with `window.history.pushState`, `window.location.pa
   - all projects
   - a single project page
   - a category page
-  - an author profile/dashboard page
 
 ### Authenticated builder
 
@@ -167,8 +166,8 @@ Manual routes currently used:
 - `/dashboard`
   signed-in user dashboard
 
-- `/profile/:slug`
-  public author profile view
+- `/dashboard/:ownerId`
+  internal author page for signed-in users
 
 - `/project/:slug`
   public project page

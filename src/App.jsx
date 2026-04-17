@@ -219,49 +219,6 @@ function getAuthorDisplayName({
   );
 }
 
-function getAuthorRouteSegment({
-  ownerId = "",
-  ownerEmail = "",
-  profile = null,
-  project = null,
-  sessionUser = null,
-  allAuthors = []
-} = {}) {
-  const displayName = getAuthorDisplayName({
-    ownerId,
-    ownerEmail,
-    profile,
-    project,
-    sessionUser
-  });
-  const baseSlug = slugify(displayName) || "author";
-  const duplicateCount = allAuthors.filter((author) => {
-    if (author.ownerId === ownerId) {
-      return false;
-    }
-
-    return (slugify(author.displayName) || "author") === baseSlug;
-  }).length;
-
-  return duplicateCount > 0 ? `${baseSlug}-${String(ownerId).slice(0, 8)}` : baseSlug;
-}
-
-function extractAuthorIdFromRouteSegment(routeSegment, allAuthors = []) {
-  if (!routeSegment) {
-    return "";
-  }
-
-  const decodedSegment = decodeURIComponent(routeSegment);
-  const directMatch = allAuthors.find((author) => author.ownerId === decodedSegment);
-
-  if (directMatch) {
-    return directMatch.ownerId;
-  }
-
-  const slugMatch = allAuthors.find((author) => author.routeSegment === decodedSegment);
-  return slugMatch?.ownerId || "";
-}
-
 function createFallbackProfile({ ownerId = "", ownerEmail = "", project = null, sessionUser = null } = {}) {
   const metadata = sessionUser?.user_metadata || {};
   const fallbackName = getAuthorDisplayName({
@@ -572,47 +529,6 @@ function App() {
   const categoryMenuRef = useRef(null);
   const hasLoadedCachedProjectsRef = useRef(false);
   const previousMyProjectsRef = useRef([]);
-  const authorDirectory = Array.from(
-    new Map(
-      [...projects, ...myProjects].filter((project) => project?.owner_id).map((project) => [
-        project.owner_id,
-        {
-          ownerId: project.owner_id,
-          ownerEmail: project.owner_email || "",
-          project
-        }
-      ])
-    ).values()
-  ).map((author) => {
-    const sessionUser = session?.user?.id === author.ownerId ? session.user : null;
-    const profile = authorProfiles[author.ownerId] || (ownProfile?.owner_id === author.ownerId ? ownProfile : null);
-
-    return {
-      ownerId: author.ownerId,
-      ownerEmail: author.ownerEmail,
-      displayName: getAuthorDisplayName({
-        ownerId: author.ownerId,
-        ownerEmail: author.ownerEmail,
-        profile,
-        project: author.project,
-        sessionUser
-      }),
-      profile,
-      project: author.project,
-      sessionUser
-    };
-  });
-  const authorRouteDirectory = authorDirectory.map((author) => ({
-    ...author,
-    routeSegment: getAuthorRouteSegment({
-      ownerId: author.ownerId,
-      ownerEmail: author.ownerEmail,
-      profile: author.profile,
-      project: author.project,
-      sessionUser: author.sessionUser,
-      allAuthors: authorDirectory
-    })
-  }));
 
   function pushToast(toast) {
     const toastId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -1147,11 +1063,10 @@ function App() {
         return;
       }
 
-      if (path.startsWith("/profile/")) {
-        const routeSegment = path.replace("/profile/", "");
-        const resolvedAuthorId = extractAuthorIdFromRouteSegment(routeSegment, authorRouteDirectory);
+      if (path.startsWith("/dashboard/")) {
+        const authorId = decodeURIComponent(path.replace("/dashboard/", ""));
         setActiveView("dashboard");
-        setActiveAuthorId(resolvedAuthorId || decodeURIComponent(routeSegment));
+        setActiveAuthorId(session ? authorId : "");
         setActiveSlug("");
         setActivePreviewId("");
         setActiveCategorySlug("");
@@ -1207,7 +1122,7 @@ function App() {
     return () => {
       window.removeEventListener("popstate", syncViewFromLocation);
     };
-  }, [authorRouteDirectory, session]);
+  }, [session]);
 
   useEffect(() => {
     setVisibleProjectsCount(initialVisibleProjectsCount);
@@ -1820,32 +1735,14 @@ function App() {
     setIsMenuOpen(false);
   }
 
-  function openAuthorProfile(ownerId, options = {}) {
+  function openAuthorProfile(ownerId) {
     if (!ownerId) {
       return;
     }
 
     const fallbackProject =
       [...projects, ...myProjects].find((project) => project.owner_id === ownerId) || null;
-    const directoryEntry = authorRouteDirectory.find((author) => author.ownerId === ownerId);
-    const routeSegment =
-      directoryEntry?.routeSegment ||
-      getAuthorRouteSegment({
-        ownerId,
-        ownerEmail: fallbackProject?.owner_email || session?.user?.email || "",
-        profile: authorProfiles[ownerId] || (ownProfile?.owner_id === ownerId ? ownProfile : null),
-        project: fallbackProject,
-        sessionUser: session?.user?.id === ownerId ? session.user : null,
-        allAuthors: authorDirectory
-      });
-    const targetPath = `/profile/${encodeURIComponent(routeSegment)}`;
-
-    if (options?.newTab) {
-      window.open(targetPath, "_blank", "noopener,noreferrer");
-      return;
-    }
-
-    window.history.pushState({}, "", targetPath);
+    window.history.pushState({}, "", `/dashboard/${encodeURIComponent(ownerId)}`);
     setActiveView("dashboard");
     setActiveAuthorId(ownerId);
     setActiveSlug("");
@@ -2281,7 +2178,6 @@ function App() {
               deletingProjectId={deletingProjectId}
               restoringProjectId={restoringProjectId}
               openProject={openProject}
-              openAuthorProfile={openAuthorProfile}
               openCategoryPage={openCategoryPage}
               getProjectCategories={getProjectCategories}
               profileLogoInputRef={profileLogoInputRef}

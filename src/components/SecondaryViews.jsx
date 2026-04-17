@@ -194,7 +194,6 @@ export function DashboardView({
   deletingProjectId,
   restoringProjectId,
   openProject,
-  openAuthorProfile,
   openCategoryPage,
   getProjectCategories,
   profileLogoInputRef
@@ -213,7 +212,6 @@ export function DashboardView({
   const profileName = dashboardProfile?.display_name || userName;
   const profileBio = dashboardProfile?.bio || "This author has not added a bio yet.";
   const profileLogoPreview = profileLogoFile ? URL.createObjectURL(profileLogoFile) : dashboardProfile?.avatar_url || ownProfile?.avatar_url || "";
-  const publicProfileOwnerId = dashboardProfile?.owner_id || session?.user?.id || "";
 
   useEffect(() => {
     if (!isOwnDashboard) {
@@ -246,9 +244,6 @@ export function DashboardView({
                     Edit profile
                   </button>
                 ) : null}
-                <button className="inline-flex items-center justify-center rounded-full border border-white/30 bg-white/10 px-5 py-3 text-sm font-semibold text-white backdrop-blur transition hover:border-white/50 hover:bg-white/15" onClick={() => openAuthorProfile(publicProfileOwnerId, { newTab: true })} type="button">
-                  View public profile
-                </button>
               </div>
             </div>
           </Surface>
