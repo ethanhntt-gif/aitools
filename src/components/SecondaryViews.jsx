@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { ArrowUpRightIcon, EyeIcon, PenIcon, RefreshIcon, SearchIcon, TrashIcon } from "./icons";
 import { EmptyState, SectionIntro, StatCard, Surface, ToolCard } from "./ui";
 
@@ -172,8 +172,19 @@ export function DashboardView({
   session,
   userName,
   myProjects,
+  ownProfile,
+  dashboardProfile,
+  dashboardProjects,
+  isOwnDashboard,
+  profileForm,
+  profileLogoFile,
+  profileSaveStatus,
+  profileSaveMessage,
   dashboardSearchQuery,
   handleDashboardSearchQueryChange,
+  handleProfileInputChange,
+  handleProfileLogoFileChange,
+  handleProfileSave,
   openHome,
   openModal,
   openProjectPreview,
@@ -182,46 +193,145 @@ export function DashboardView({
   handleRestoreProject,
   deletingProjectId,
   restoringProjectId,
-  openProject
+  openProject,
+  openAuthorProfile,
+  openCategoryPage,
+  getProjectCategories,
+  profileLogoInputRef
 }) {
+  const [isProfileEditorOpen, setIsProfileEditorOpen] = useState(false);
   const normalizedDashboardSearchQuery = dashboardSearchQuery.trim().toLowerCase();
   const filteredProjects = normalizedDashboardSearchQuery
-    ? myProjects.filter((project) => [project.title, project.slogan].filter(Boolean).some((value) => String(value).toLowerCase().includes(normalizedDashboardSearchQuery)))
-    : myProjects;
+    ? dashboardProjects.filter((project) => [project.title, project.slogan].filter(Boolean).some((value) => String(value).toLowerCase().includes(normalizedDashboardSearchQuery)))
+    : dashboardProjects;
   const publishedProjects = filteredProjects.filter((project) => getListingStatus(project) === "published");
   const reviewProjects = filteredProjects.filter((project) => {
     const status = getListingStatus(project);
     return status !== "published" && status !== "deleted";
   });
   const deletedProjects = filteredProjects.filter((project) => getListingStatus(project) === "deleted");
+  const profileName = dashboardProfile?.display_name || userName;
+  const profileBio = dashboardProfile?.bio || "This author has not added a bio yet.";
+  const profileLogoPreview = profileLogoFile ? URL.createObjectURL(profileLogoFile) : dashboardProfile?.avatar_url || ownProfile?.avatar_url || "";
+  const publicProfileOwnerId = dashboardProfile?.owner_id || session?.user?.id || "";
+
+  useEffect(() => {
+    if (!isOwnDashboard) {
+      setIsProfileEditorOpen(false);
+    }
+  }, [isOwnDashboard]);
 
   return (
     <section className="space-y-6">
-      <SectionIntro eyebrow="Personal workspace" title="Your dashboard" description="A compact view of your submissions, statuses, and quick actions." action={<button className="inline-flex items-center justify-center rounded-full border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white dark:border-slate-700 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-900 dark:hover:text-slate-100" onClick={openHome} type="button">Back to weekly launch</button>} />
-      {session ? (
+      <SectionIntro eyebrow="" title={isOwnDashboard ? "Your dashboard" : profileName} description="" action={<button className="inline-flex items-center justify-center rounded-full border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white dark:border-slate-700 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-900 dark:hover:text-slate-100" onClick={openHome} type="button">Back to weekly launch</button>} />
+      {dashboardProfile ? (
         <>
-          <div className="grid gap-3 md:grid-cols-2">
-            <StatCard value={userName} label={session.user.email} />
-            <StatCard value={`${myProjects.length}`} label="Submitted projects" />
-          </div>
-          <SectionIntro eyebrow="Your content" title="My projects" description="Track moderation and update listings without the oversized card layout." action={<button className="inline-flex items-center justify-center rounded-full bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-sky-600" onClick={openModal} type="button">Submit Tool</button>} />
-          {myProjects.length ? (
+          <Surface className="group relative overflow-hidden">
+            <div className="bg-[linear-gradient(135deg,_rgba(15,23,42,1)_0%,_rgba(15,23,42,0.97)_48%,_rgba(3,105,161,0.9)_100%)] px-6 py-8 text-white sm:px-8 sm:py-10">
+              <div className="flex items-start gap-5">
+                <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-[28px] border border-white/15 bg-white text-3xl font-semibold text-slate-950 shadow-lg">
+                  {profileLogoPreview ? <img alt={profileName} className="h-full w-full object-cover" src={profileLogoPreview} /> : (profileName || "A").slice(0, 1).toUpperCase()}
+                </div>
+                <div className="min-w-0 pt-1">
+                  <h2 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">{profileName}</h2>
+                  <p className="mt-3 max-w-2xl text-sm leading-7 text-sky-50/90 sm:text-base">{profileBio}</p>
+                </div>
+              </div>
+            </div>
+            <div className="pointer-events-none absolute inset-0 bg-slate-950/40 opacity-0 transition duration-200 group-hover:opacity-100 group-focus-within:opacity-100" />
+            <div className="pointer-events-none absolute inset-y-0 right-0 flex translate-x-3 items-center px-6 opacity-0 transition duration-200 group-hover:translate-x-0 group-hover:opacity-100 group-focus-within:translate-x-0 group-focus-within:opacity-100 sm:px-8">
+              <div className="pointer-events-auto flex flex-col items-end gap-3">
+                {isOwnDashboard ? (
+                  <button className="inline-flex items-center justify-center rounded-full bg-white px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-sky-50" onClick={() => setIsProfileEditorOpen(true)} type="button">
+                    Edit profile
+                  </button>
+                ) : null}
+                <button className="inline-flex items-center justify-center rounded-full border border-white/30 bg-white/10 px-5 py-3 text-sm font-semibold text-white backdrop-blur transition hover:border-white/50 hover:bg-white/15" onClick={() => openAuthorProfile(publicProfileOwnerId, { newTab: true })} type="button">
+                  View public profile
+                </button>
+              </div>
+            </div>
+          </Surface>
+          <SectionIntro eyebrow={isOwnDashboard ? "Your content" : "Published work"} title={isOwnDashboard ? "My projects" : `${profileName}'s projects`} description={isOwnDashboard ? "Track moderation and update listings without the oversized card layout." : "Projects currently visible in the public directory."} action={isOwnDashboard ? <button className="inline-flex items-center justify-center rounded-full bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-sky-600" onClick={openModal} type="button">Submit Tool</button> : null} />
+          {dashboardProjects.length ? (
             <div className="space-y-5">
               <Surface className="p-3.5 sm:p-4">
                 <label className="relative block">
                   <span className="sr-only">Search listings</span>
                   <SearchIcon className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                  <input className="w-full rounded-2xl border border-slate-200 bg-white py-2.5 pl-10 pr-4 text-sm text-slate-950 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100" onChange={handleDashboardSearchQueryChange} placeholder="Search your listings" type="search" value={dashboardSearchQuery} />
+                  <input className="w-full rounded-2xl border border-slate-200 bg-white py-2.5 pl-10 pr-4 text-sm text-slate-950 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:focus:ring-sky-500/20" onChange={handleDashboardSearchQueryChange} placeholder={isOwnDashboard ? "Search your listings" : "Search this author's projects"} type="search" value={dashboardSearchQuery} />
                 </label>
               </Surface>
-              {publishedProjects.length ? <div className="space-y-2.5"><div className="flex items-center justify-between gap-3"><p className="text-xs font-semibold uppercase tracking-[0.28em] text-emerald-600">Published</p><p className="text-xs text-slate-500 dark:text-slate-400">{publishedProjects.length} items</p></div><Surface className="overflow-hidden">{publishedProjects.map((project, index) => <div className={index === 0 ? "" : "border-t border-slate-200"} key={project.id}><ListingRow project={project} deletingProjectId={deletingProjectId} restoringProjectId={restoringProjectId} openProjectPreview={openProjectPreview} openEditModal={openEditModal} handleDeleteProject={handleDeleteProject} handleRestoreProject={handleRestoreProject} openProject={openProject} showPreviewAction={false} /></div>)}</Surface></div> : null}
-              {reviewProjects.length ? <div className="space-y-2.5"><div className="flex items-center justify-between gap-3"><p className="text-xs font-semibold uppercase tracking-[0.28em] text-sky-600">Under review</p><p className="text-xs text-slate-500 dark:text-slate-400">{reviewProjects.length} items</p></div><Surface className="overflow-hidden">{reviewProjects.map((project, index) => <div className={index === 0 ? "" : "border-t border-slate-200"} key={project.id}><ListingRow project={project} deletingProjectId={deletingProjectId} restoringProjectId={restoringProjectId} openProjectPreview={openProjectPreview} openEditModal={openEditModal} handleDeleteProject={handleDeleteProject} handleRestoreProject={handleRestoreProject} openProject={openProject} showPreviewAction /></div>)}</Surface></div> : null}
-              {deletedProjects.length ? <div className="space-y-2.5"><div className="flex items-center justify-between gap-3"><p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-500">Deleted</p><p className="text-xs text-slate-500 dark:text-slate-400">{deletedProjects.length} items</p></div><Surface className="overflow-hidden">{deletedProjects.map((project, index) => <div className={index === 0 ? "" : "border-t border-slate-200"} key={project.id}><ListingRow project={project} deletingProjectId={deletingProjectId} restoringProjectId={restoringProjectId} openProjectPreview={openProjectPreview} openEditModal={openEditModal} handleDeleteProject={handleDeleteProject} handleRestoreProject={handleRestoreProject} openProject={openProject} showPreviewAction={false} /></div>)}</Surface></div> : null}
+              {publishedProjects.length ? <div className="space-y-2.5"><div className="flex items-center justify-between gap-3"><p className="text-xs font-semibold uppercase tracking-[0.28em] text-emerald-600">Published</p><p className="text-xs text-slate-500 dark:text-slate-400">{publishedProjects.length} items</p></div>{isOwnDashboard ? <Surface className="overflow-hidden">{publishedProjects.map((project, index) => <div className={index === 0 ? "" : "border-t border-slate-200"} key={project.id}><ListingRow project={project} deletingProjectId={deletingProjectId} restoringProjectId={restoringProjectId} openProjectPreview={openProjectPreview} openEditModal={openEditModal} handleDeleteProject={handleDeleteProject} handleRestoreProject={handleRestoreProject} openProject={openProject} showPreviewAction={false} /></div>)}</Surface> : <div className="grid gap-6 md:grid-cols-2">{publishedProjects.map((project) => <ToolCard key={project.id} project={project} categories={getProjectCategories(project)} onOpenProject={openProject} onOpenCategoryPage={openCategoryPage} />)}</div>}</div> : null}
+              {isOwnDashboard && reviewProjects.length ? <div className="space-y-2.5"><div className="flex items-center justify-between gap-3"><p className="text-xs font-semibold uppercase tracking-[0.28em] text-sky-600">Under review</p><p className="text-xs text-slate-500 dark:text-slate-400">{reviewProjects.length} items</p></div><Surface className="overflow-hidden">{reviewProjects.map((project, index) => <div className={index === 0 ? "" : "border-t border-slate-200"} key={project.id}><ListingRow project={project} deletingProjectId={deletingProjectId} restoringProjectId={restoringProjectId} openProjectPreview={openProjectPreview} openEditModal={openEditModal} handleDeleteProject={handleDeleteProject} handleRestoreProject={handleRestoreProject} openProject={openProject} showPreviewAction /></div>)}</Surface></div> : null}
+              {isOwnDashboard && deletedProjects.length ? <div className="space-y-2.5"><div className="flex items-center justify-between gap-3"><p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-500">Deleted</p><p className="text-xs text-slate-500 dark:text-slate-400">{deletedProjects.length} items</p></div><Surface className="overflow-hidden">{deletedProjects.map((project, index) => <div className={index === 0 ? "" : "border-t border-slate-200"} key={project.id}><ListingRow project={project} deletingProjectId={deletingProjectId} restoringProjectId={restoringProjectId} openProjectPreview={openProjectPreview} openEditModal={openEditModal} handleDeleteProject={handleDeleteProject} handleRestoreProject={handleRestoreProject} openProject={openProject} showPreviewAction={false} /></div>)}</Surface></div> : null}
               {!filteredProjects.length ? <EmptyState>No listings match your search.</EmptyState> : null}
             </div>
-          ) : <EmptyState>You have not submitted any projects yet. Use the submit button to add your first one.</EmptyState>}
+          ) : <EmptyState>{isOwnDashboard ? "You have not submitted any projects yet. Use the submit button to add your first one." : "This author has no public projects yet."}</EmptyState>}
         </>
-      ) : <EmptyState>Sign in with Google first to open your personal dashboard.</EmptyState>}
+      ) : <EmptyState>{session ? "This profile is not ready yet." : "Sign in with Google first to open your dashboard."}</EmptyState>}
+      {isOwnDashboard && isProfileEditorOpen ? (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/55 px-4 py-10 backdrop-blur-sm" onClick={() => setIsProfileEditorOpen(false)} role="presentation">
+          <div className="mx-auto w-full max-w-3xl" onClick={(event) => event.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="edit-profile-title">
+            <Surface className="overflow-hidden p-6 sm:p-8">
+              <div className="flex items-start justify-between gap-4">
+                <div className="space-y-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.28em] text-sky-600 dark:text-sky-400">Public author profile</p>
+                  <h3 className="text-3xl font-semibold tracking-tight text-slate-950 dark:text-slate-100" id="edit-profile-title">Edit profile</h3>
+                </div>
+                <button className="rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-950 dark:border-slate-700 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-100" onClick={() => setIsProfileEditorOpen(false)} type="button">
+                  Close
+                </button>
+              </div>
+              <form className="mt-6 grid gap-5 lg:grid-cols-2" onSubmit={async (event) => {
+                await handleProfileSave(event);
+                if (profileSaveStatus !== "error") {
+                  setIsProfileEditorOpen(false);
+                }
+              }}>
+                <input ref={profileLogoInputRef} accept="image/*" className="hidden" onChange={handleProfileLogoFileChange} type="file" />
+                <div className="lg:col-span-2 grid gap-5 md:grid-cols-[180px_minmax(0,1fr)]">
+                  <button className="flex min-h-[180px] items-center justify-center overflow-hidden rounded-[24px] border border-dashed border-slate-300 bg-slate-50 text-slate-500 transition hover:border-sky-400 hover:bg-sky-50" onClick={() => profileLogoInputRef.current?.click()} type="button">
+                    {profileLogoPreview ? <img alt="Profile logo preview" className="h-full w-full object-cover" src={profileLogoPreview} /> : <span className="px-6 text-center text-sm font-medium">Upload logo</span>}
+                  </button>
+                  <div className="space-y-3">
+                    <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">Profile logo</p>
+                    <p className="text-sm leading-6 text-slate-500 dark:text-slate-400">
+                      Upload a square logo or avatar. It will appear next to your name in the public profile.
+                    </p>
+                    {profileLogoFile ? <p className="text-sm font-medium text-slate-700 dark:text-slate-300">{profileLogoFile.name}</p> : null}
+                    <button className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-950 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:border-slate-600 dark:hover:bg-slate-900 dark:hover:text-slate-100" onClick={() => profileLogoInputRef.current?.click()} type="button">
+                      Choose image
+                    </button>
+                  </div>
+                </div>
+                <label className="space-y-2 lg:col-span-2">
+                  <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Display name</span>
+                  <input className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:focus:ring-sky-500/20" name="display_name" onChange={handleProfileInputChange} placeholder="Ethan Hunt" type="text" value={profileForm.display_name} />
+                </label>
+                <label className="space-y-2 lg:col-span-2">
+                  <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Bio</span>
+                  <textarea className="min-h-32 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:focus:ring-sky-500/20" name="bio" onChange={handleProfileInputChange} placeholder="Tell people what you build and who it is for." rows="5" value={profileForm.bio} />
+                </label>
+                <div className="lg:col-span-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  {profileSaveMessage ? (
+                    <div className={`rounded-2xl px-4 py-3 text-sm font-medium ${
+                      profileSaveStatus === "error"
+                        ? "bg-rose-50 text-rose-700 ring-1 ring-rose-200"
+                        : "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200"
+                    }`}>
+                      {profileSaveMessage}
+                    </div>
+                  ) : <div />}
+                  <button className="inline-flex items-center justify-center rounded-full bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-sky-600 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-sky-500 dark:hover:bg-sky-400" disabled={profileSaveStatus === "saving"} type="submit">
+                    {profileSaveStatus === "saving" ? "Saving..." : "Save profile"}
+                  </button>
+                </div>
+              </form>
+            </Surface>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -286,7 +396,7 @@ export function ProjectsView({
   );
 }
 
-export function ProjectView({ activeProject, isPreview, openHome, openCategoryPage }) {
+export function ProjectView({ activeProject, activeAuthorProfile, isPreview, openHome, openCategoryPage, openAuthorProfile }) {
   return (
     <section className="space-y-8">
       <SectionIntro eyebrow="Project page" title={activeProject?.title || "Project"} description={isPreview ? activeProject?.slogan || "Private preview of your listing before publication." : activeProject?.slogan || "A closer look at this tool from the directory."} action={<button className="inline-flex items-center justify-center rounded-full border border-slate-200 px-5 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white" onClick={openHome} type="button">Back to weekly launch</button>} />
@@ -310,7 +420,7 @@ export function ProjectView({ activeProject, isPreview, openHome, openCategoryPa
             </div>
           </Surface>
           <div className="space-y-6">
-            <Surface className="p-6"><p className="text-xs font-semibold uppercase tracking-[0.28em] text-sky-600">Author</p><div className="mt-4 flex items-center gap-4"><div className="flex h-16 w-16 items-center justify-center rounded-[22px] border border-slate-200 bg-[linear-gradient(135deg,_#0f172a_0%,_#0369a1_100%)] text-xl font-semibold text-white shadow-sm">{getAuthorInitial(activeProject.owner_email)}</div><div className="min-w-0"><p className="text-lg font-semibold text-slate-950">{formatAuthorName(activeProject.owner_email)}</p></div></div></Surface>
+            <Surface className="p-6"><p className="text-xs font-semibold uppercase tracking-[0.28em] text-sky-600">Author</p><button className="mt-4 flex w-full items-center gap-4 rounded-[22px] border border-slate-200 bg-white px-4 py-4 text-left transition hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:hover:border-slate-600 dark:hover:bg-slate-900" onClick={() => openAuthorProfile(activeProject.owner_id)} type="button"><div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-[22px] border border-slate-200 bg-[linear-gradient(135deg,_#0f172a_0%,_#0369a1_100%)] text-xl font-semibold text-white shadow-sm dark:border-slate-700">{activeAuthorProfile?.avatar_url ? <img alt={activeAuthorProfile.display_name} className="h-full w-full object-cover" src={activeAuthorProfile.avatar_url} /> : getAuthorInitial(activeProject.owner_email)}</div><div className="min-w-0"><p className="text-lg font-semibold text-slate-950 dark:text-slate-100">{activeAuthorProfile?.display_name || formatAuthorName(activeProject.owner_email)}</p><p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{activeAuthorProfile?.headline || "Open author profile"}</p></div></button></Surface>
             <Surface className="p-6"><p className="text-xs font-semibold uppercase tracking-[0.28em] text-sky-600">Visit project</p><a className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-full bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-sky-600" href={activeProject.project_url || "#"} target="_blank" rel="noreferrer">Open live site<ArrowUpRightIcon className="h-4 w-4" /></a></Surface>
           </div>
         </div>

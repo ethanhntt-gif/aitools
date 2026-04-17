@@ -17,6 +17,12 @@ const initialForm = {
   launch_week: ""
 };
 
+const initialProfileForm = {
+  display_name: "",
+  bio: "",
+  avatar_url: ""
+};
+
 const storageBucket = "project-assets";
 const totalModalSteps = 3;
 const maxCategories = 5;
@@ -171,6 +177,121 @@ function isVotingMigrationMissing(error) {
   const message = error?.message?.toLowerCase() || "";
 
   return message.includes("project_votes") || message.includes("vote");
+}
+
+function isProfileMigrationMissing(error) {
+  const message = error?.message?.toLowerCase() || "";
+
+  return message.includes("profiles");
+}
+
+function formatAuthorNameValue(ownerEmail) {
+  if (!ownerEmail) {
+    return "Unknown author";
+  }
+
+  const localPart = ownerEmail.split("@")[0] || ownerEmail;
+
+  return localPart
+    .split(/[._-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function getAuthorDisplayName({
+  ownerId = "",
+  ownerEmail = "",
+  profile = null,
+  project = null,
+  sessionUser = null
+} = {}) {
+  const metadata = sessionUser?.user_metadata || {};
+
+  return (
+    profile?.display_name ||
+    metadata.full_name ||
+    metadata.name ||
+    formatAuthorNameValue(ownerEmail) ||
+    project?.title ||
+    ownerId ||
+    "Unknown author"
+  );
+}
+
+function getAuthorRouteSegment({
+  ownerId = "",
+  ownerEmail = "",
+  profile = null,
+  project = null,
+  sessionUser = null,
+  allAuthors = []
+} = {}) {
+  const displayName = getAuthorDisplayName({
+    ownerId,
+    ownerEmail,
+    profile,
+    project,
+    sessionUser
+  });
+  const baseSlug = slugify(displayName) || "author";
+  const duplicateCount = allAuthors.filter((author) => {
+    if (author.ownerId === ownerId) {
+      return false;
+    }
+
+    return (slugify(author.displayName) || "author") === baseSlug;
+  }).length;
+
+  return duplicateCount > 0 ? `${baseSlug}-${String(ownerId).slice(0, 8)}` : baseSlug;
+}
+
+function extractAuthorIdFromRouteSegment(routeSegment, allAuthors = []) {
+  if (!routeSegment) {
+    return "";
+  }
+
+  const decodedSegment = decodeURIComponent(routeSegment);
+  const directMatch = allAuthors.find((author) => author.ownerId === decodedSegment);
+
+  if (directMatch) {
+    return directMatch.ownerId;
+  }
+
+  const slugMatch = allAuthors.find((author) => author.routeSegment === decodedSegment);
+  return slugMatch?.ownerId || "";
+}
+
+function createFallbackProfile({ ownerId = "", ownerEmail = "", project = null, sessionUser = null } = {}) {
+  const metadata = sessionUser?.user_metadata || {};
+  const fallbackName = getAuthorDisplayName({
+    ownerId,
+    ownerEmail,
+    project,
+    sessionUser
+  });
+
+  return {
+    owner_id: ownerId,
+    owner_email: ownerEmail,
+    display_name: fallbackName,
+    bio: "",
+    avatar_url: metadata.avatar_url || "",
+    created_at: null,
+    updated_at: null
+  };
+}
+
+function normalizeProfile(profile, fallback = {}) {
+  return {
+    owner_id: profile?.owner_id || fallback.owner_id || "",
+    owner_email: profile?.owner_email || fallback.owner_email || "",
+    display_name: profile?.display_name || fallback.display_name || "",
+    bio: profile?.bio || "",
+    avatar_url: profile?.avatar_url || fallback.avatar_url || "",
+    created_at: profile?.created_at || null,
+    updated_at: profile?.updated_at || null
+  };
 }
 
 function getFirstWednesdayOfYear(year) {
@@ -329,6 +450,7 @@ function normalizeProject(project) {
 const demoProjects = [
   {
     id: 1,
+    owner_id: "demo-author-1",
     title: "AI Outreach Assistant",
     slogan: "Prospecting and follow-ups on autopilot.",
     description: "Automates prospect research, drafts outreach, and tracks conversations.",
@@ -344,6 +466,7 @@ const demoProjects = [
   },
   {
     id: 2,
+    owner_id: "demo-author-2",
     title: "Content Studio",
     slogan: "From brief to launch-ready content in minutes.",
     description: "Turns briefs into social posts, blog outlines, and campaign assets in minutes.",
@@ -359,6 +482,7 @@ const demoProjects = [
   },
   {
     id: 3,
+    owner_id: "demo-author-3",
     title: "Support Copilot",
     slogan: "Faster replies, calmer queues, better support.",
     description: "Suggests support replies, summarizes tickets, and surfaces urgent issues.",
@@ -374,6 +498,33 @@ const demoProjects = [
   }
 ];
 
+const demoProfiles = {
+  "demo-author-1": {
+    owner_id: "demo-author-1",
+    owner_email: "alex@aitools.dev",
+    display_name: "Alex Mercer",
+    headline: "Building AI systems for outbound teams.",
+    bio: "I work on sales automation and operator tooling for lean growth teams.",
+    avatar_url: ""
+  },
+  "demo-author-2": {
+    owner_id: "demo-author-2",
+    owner_email: "maya@aitools.dev",
+    display_name: "Maya Chen",
+    headline: "Helping teams turn briefs into content engines.",
+    bio: "I design AI content workflows for founders, marketers, and small creative teams.",
+    avatar_url: ""
+  },
+  "demo-author-3": {
+    owner_id: "demo-author-3",
+    owner_email: "ethan@aitools.dev",
+    display_name: "Ethan Hunt",
+    headline: "Support tooling, calm queues, and clear handoffs.",
+    bio: "Focused on AI copilots that make customer support faster and more humane.",
+    avatar_url: ""
+  }
+};
+
 function App() {
   const [projects, setProjects] = useState([]);
   const [myProjects, setMyProjects] = useState([]);
@@ -388,6 +539,10 @@ function App() {
   const [session, setSession] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [formData, setFormData] = useState(initialForm);
+  const [profileForm, setProfileForm] = useState(initialProfileForm);
+  const [profileSaveStatus, setProfileSaveStatus] = useState("idle");
+  const [profileSaveMessage, setProfileSaveMessage] = useState("");
+  const [profileLogoFile, setProfileLogoFile] = useState(null);
   const [submitStatus, setSubmitStatus] = useState("idle");
   const [submitMessage, setSubmitMessage] = useState("");
   const [toasts, setToasts] = useState([]);
@@ -399,10 +554,13 @@ function App() {
   const [activeView, setActiveView] = useState("home");
   const [activeSlug, setActiveSlug] = useState("");
   const [activePreviewId, setActivePreviewId] = useState("");
+  const [activeAuthorId, setActiveAuthorId] = useState("");
   const [activeCategorySlug, setActiveCategorySlug] = useState("");
   const [homeCategoryFilterSlug, setHomeCategoryFilterSlug] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [dashboardSearchQuery, setDashboardSearchQuery] = useState("");
+  const [authorProfiles, setAuthorProfiles] = useState({});
+  const [ownProfile, setOwnProfile] = useState(null);
   const [visibleProjectsCount, setVisibleProjectsCount] = useState(initialVisibleProjectsCount);
   const [modalStep, setModalStep] = useState(1);
   const [isCategoryMenuOpen, setIsCategoryMenuOpen] = useState(false);
@@ -410,9 +568,51 @@ function App() {
   const [screenshotFile, setScreenshotFile] = useState(null);
   const logoInputRef = useRef(null);
   const screenshotInputRef = useRef(null);
+  const profileLogoInputRef = useRef(null);
   const categoryMenuRef = useRef(null);
   const hasLoadedCachedProjectsRef = useRef(false);
   const previousMyProjectsRef = useRef([]);
+  const authorDirectory = Array.from(
+    new Map(
+      [...projects, ...myProjects].filter((project) => project?.owner_id).map((project) => [
+        project.owner_id,
+        {
+          ownerId: project.owner_id,
+          ownerEmail: project.owner_email || "",
+          project
+        }
+      ])
+    ).values()
+  ).map((author) => {
+    const sessionUser = session?.user?.id === author.ownerId ? session.user : null;
+    const profile = authorProfiles[author.ownerId] || (ownProfile?.owner_id === author.ownerId ? ownProfile : null);
+
+    return {
+      ownerId: author.ownerId,
+      ownerEmail: author.ownerEmail,
+      displayName: getAuthorDisplayName({
+        ownerId: author.ownerId,
+        ownerEmail: author.ownerEmail,
+        profile,
+        project: author.project,
+        sessionUser
+      }),
+      profile,
+      project: author.project,
+      sessionUser
+    };
+  });
+  const authorRouteDirectory = authorDirectory.map((author) => ({
+    ...author,
+    routeSegment: getAuthorRouteSegment({
+      ownerId: author.ownerId,
+      ownerEmail: author.ownerEmail,
+      profile: author.profile,
+      project: author.project,
+      sessionUser: author.sessionUser,
+      allAuthors: authorDirectory
+    })
+  }));
 
   function pushToast(toast) {
     const toastId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -631,6 +831,107 @@ function App() {
     );
   }
 
+  async function loadOwnProfile(activeSession = session) {
+    if (!activeSession?.user?.id) {
+      setOwnProfile(null);
+      setProfileForm(initialProfileForm);
+      setProfileLogoFile(null);
+      return;
+    }
+
+    const fallbackProfile = createFallbackProfile({
+      ownerId: activeSession.user.id,
+      ownerEmail: activeSession.user.email || "",
+      sessionUser: activeSession.user
+    });
+
+    if (!hasSupabaseCredentials || !supabase) {
+      setOwnProfile(fallbackProfile);
+      setProfileForm({
+        display_name: fallbackProfile.display_name,
+        bio: fallbackProfile.bio,
+        avatar_url: fallbackProfile.avatar_url
+      });
+      setAuthorProfiles((current) => ({
+        ...current,
+        [fallbackProfile.owner_id]: fallbackProfile
+      }));
+      setProfileLogoFile(null);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("owner_id, owner_email, display_name, headline, bio, avatar_url, created_at, updated_at")
+      .eq("owner_id", activeSession.user.id)
+      .maybeSingle();
+
+    if (error && !isProfileMigrationMissing(error)) {
+      console.error("Could not load own profile.", error);
+    }
+
+    const normalizedProfile = normalizeProfile(data, fallbackProfile);
+    setOwnProfile(normalizedProfile);
+      setProfileForm({
+        display_name: normalizedProfile.display_name,
+        bio: normalizedProfile.bio,
+        avatar_url: normalizedProfile.avatar_url
+      });
+    setAuthorProfiles((current) => ({
+      ...current,
+      [normalizedProfile.owner_id]: normalizedProfile
+    }));
+    setProfileLogoFile(null);
+  }
+
+  async function loadAuthorProfile(ownerId, fallbackProject = null) {
+    if (!ownerId) {
+      return null;
+    }
+
+    if (authorProfiles[ownerId]) {
+      return authorProfiles[ownerId];
+    }
+
+    const fallbackProfile =
+      !hasSupabaseCredentials || !supabase
+        ? normalizeProfile(demoProfiles[ownerId], createFallbackProfile({
+            ownerId,
+            ownerEmail: fallbackProject?.owner_email || "",
+            project: fallbackProject
+          }))
+        : createFallbackProfile({
+            ownerId,
+            ownerEmail: fallbackProject?.owner_email || "",
+            project: fallbackProject
+          });
+
+    if (!hasSupabaseCredentials || !supabase) {
+      setAuthorProfiles((current) => ({
+        ...current,
+        [ownerId]: fallbackProfile
+      }));
+      return fallbackProfile;
+    }
+
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("owner_id, owner_email, display_name, headline, bio, avatar_url, created_at, updated_at")
+      .eq("owner_id", ownerId)
+      .maybeSingle();
+
+    if (error && !isProfileMigrationMissing(error)) {
+      console.error("Could not load author profile.", error);
+    }
+
+    const normalizedProfile = normalizeProfile(data, fallbackProfile);
+    setAuthorProfiles((current) => ({
+      ...current,
+      [ownerId]: normalizedProfile
+    }));
+    return normalizedProfile;
+  }
+
   async function loadProjects() {
     if (!hasSupabaseCredentials || !supabase) {
       setProjects(demoProjects);
@@ -795,6 +1096,7 @@ function App() {
     loadCategories();
     loadProjects();
     loadMyProjects(session);
+    loadOwnProfile(session);
   }, [session]);
 
   useEffect(() => {
@@ -808,12 +1110,50 @@ function App() {
   }, [projects, session]);
 
   useEffect(() => {
+    if (!activeAuthorId) {
+      return;
+    }
+
+    const fallbackProject =
+      [...projects, ...myProjects].find((project) => project.owner_id === activeAuthorId) || null;
+
+    loadAuthorProfile(activeAuthorId, fallbackProject);
+  }, [activeAuthorId, projects, myProjects]);
+
+  useEffect(() => {
+    const previewProject = myProjects.find((project) => project.id === activePreviewId);
+    const currentActiveProject = activePreviewId
+      ? previewProject || null
+      : projects.find((project) => slugify(project.title) === activeSlug) || null;
+
+    if (!currentActiveProject?.owner_id) {
+      return;
+    }
+
+    loadAuthorProfile(currentActiveProject.owner_id, currentActiveProject);
+  }, [activePreviewId, activeSlug, myProjects, projects]);
+
+  useEffect(() => {
     function syncViewFromLocation() {
       const path = window.location.pathname.replace(/\/+$/, "") || "/";
 
       if (path === "/dashboard") {
         setActiveView("dashboard");
         setActiveSlug("");
+        setActivePreviewId("");
+        setActiveAuthorId(session?.user?.id || "");
+        setActiveCategorySlug("");
+        setHomeCategoryFilterSlug("");
+        return;
+      }
+
+      if (path.startsWith("/profile/")) {
+        const routeSegment = path.replace("/profile/", "");
+        const resolvedAuthorId = extractAuthorIdFromRouteSegment(routeSegment, authorRouteDirectory);
+        setActiveView("dashboard");
+        setActiveAuthorId(resolvedAuthorId || decodeURIComponent(routeSegment));
+        setActiveSlug("");
+        setActivePreviewId("");
         setActiveCategorySlug("");
         setHomeCategoryFilterSlug("");
         return;
@@ -849,6 +1189,7 @@ function App() {
         setActiveView("category");
         setActiveCategorySlug(decodeURIComponent(path.replace("/category/", "")));
         setActiveSlug("");
+        setActiveAuthorId("");
         setHomeCategoryFilterSlug("");
         return;
       }
@@ -856,6 +1197,7 @@ function App() {
       setActiveView("home");
       setActiveSlug("");
       setActivePreviewId("");
+      setActiveAuthorId("");
       setActiveCategorySlug("");
     }
 
@@ -865,7 +1207,7 @@ function App() {
     return () => {
       window.removeEventListener("popstate", syncViewFromLocation);
     };
-  }, []);
+  }, [authorRouteDirectory, session]);
 
   useEffect(() => {
     setVisibleProjectsCount(initialVisibleProjectsCount);
@@ -971,6 +1313,27 @@ function App() {
       ...current,
       [name]: value
     }));
+  }
+
+  function handleProfileInputChange(event) {
+    const { name, value } = event.target;
+    setProfileSaveStatus("idle");
+    setProfileSaveMessage("");
+    setProfileForm((current) => ({
+      ...current,
+      [name]: value
+    }));
+  }
+
+  function handleProfileLogoFileChange(event) {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    setProfileSaveStatus("idle");
+    setProfileSaveMessage("");
+    setProfileLogoFile(file);
   }
 
   function toggleCategoryMenu() {
@@ -1183,6 +1546,89 @@ function App() {
     await loadMyProjects(session);
   }
 
+  async function handleProfileSave(event) {
+    event.preventDefault();
+
+    if (!session?.user?.id) {
+      setProfileSaveStatus("error");
+      setProfileSaveMessage("Sign in before updating your author profile.");
+      return;
+    }
+
+    const fallbackProfile = createFallbackProfile({
+      ownerId: session.user.id,
+      ownerEmail: session.user.email || "",
+      sessionUser: session.user
+    });
+
+    const payload = {
+      owner_id: session.user.id,
+      owner_email: session.user.email || "",
+      display_name: profileForm.display_name.trim() || fallbackProfile.display_name,
+      bio: profileForm.bio.trim(),
+      avatar_url: profileForm.avatar_url.trim(),
+      updated_at: new Date().toISOString()
+    };
+
+    if (profileLogoFile) {
+      const logoUpload = await uploadAsset(profileLogoFile, "profiles");
+      if (!logoUpload.success) {
+        setProfileSaveStatus("error");
+        setProfileSaveMessage(logoUpload.message);
+        return;
+      }
+
+      payload.avatar_url = logoUpload.publicUrl;
+    }
+
+    if (!hasSupabaseCredentials || !supabase) {
+      const normalizedProfile = normalizeProfile(payload, fallbackProfile);
+      setOwnProfile(normalizedProfile);
+      setAuthorProfiles((current) => ({
+        ...current,
+        [payload.owner_id]: normalizedProfile
+      }));
+      setProfileSaveStatus("success");
+      setProfileSaveMessage("Demo mode: author profile updated locally for this session.");
+      return;
+    }
+
+    setProfileSaveStatus("saving");
+    setProfileSaveMessage("");
+
+    const { data, error } = await supabase
+      .from("profiles")
+      .upsert(payload, { onConflict: "owner_id" })
+      .select("owner_id, owner_email, display_name, headline, bio, avatar_url, created_at, updated_at")
+      .single();
+
+    if (error) {
+      setProfileSaveStatus("error");
+      setProfileSaveMessage(
+        isProfileMigrationMissing(error)
+          ? "Run the author profile migration first to save profile details."
+          : "Could not save your author profile right now."
+      );
+      console.error(error);
+      return;
+    }
+
+    const normalizedProfile = normalizeProfile(data, fallbackProfile);
+    setOwnProfile(normalizedProfile);
+    setAuthorProfiles((current) => ({
+      ...current,
+      [payload.owner_id]: normalizedProfile
+    }));
+    setProfileForm({
+      display_name: normalizedProfile.display_name,
+      bio: normalizedProfile.bio,
+      avatar_url: normalizedProfile.avatar_url
+    });
+    setProfileLogoFile(null);
+    setProfileSaveStatus("success");
+    setProfileSaveMessage("Author profile updated.");
+  }
+
   function openModal() {
     setSubmitStatus("idle");
     setSubmitMessage("");
@@ -1313,6 +1759,10 @@ function App() {
     setIsMenuOpen(false);
     window.history.pushState({}, "", "/dashboard");
     setActiveView("dashboard");
+    setActiveSlug("");
+    setActivePreviewId("");
+    setActiveAuthorId(session?.user?.id || "");
+    setActiveCategorySlug("");
     setHomeCategoryFilterSlug("");
   }
 
@@ -1320,6 +1770,7 @@ function App() {
     window.history.pushState({}, "", "/projects");
     setActiveView("projects");
     setActiveSlug("");
+    setActiveAuthorId("");
     setActiveCategorySlug("");
     setHomeCategoryFilterSlug("");
     setIsMenuOpen(false);
@@ -1329,6 +1780,7 @@ function App() {
     window.history.pushState({}, "", "/");
     setActiveView("home");
     setActiveSlug("");
+    setActiveAuthorId("");
     setActiveCategorySlug("");
     setHomeCategoryFilterSlug("");
     setIsMenuOpen(false);
@@ -1340,6 +1792,7 @@ function App() {
     setActiveView("project");
     setActiveSlug(projectSlug);
     setActivePreviewId("");
+    setActiveAuthorId("");
     setActiveCategorySlug("");
     setHomeCategoryFilterSlug("");
     setIsMenuOpen(false);
@@ -1350,6 +1803,7 @@ function App() {
     setActiveView("project");
     setActivePreviewId(project.id);
     setActiveSlug("");
+    setActiveAuthorId("");
     setActiveCategorySlug("");
     setHomeCategoryFilterSlug("");
     setIsMenuOpen(false);
@@ -1361,8 +1815,45 @@ function App() {
     setActiveView("category");
     setActiveCategorySlug(categorySlug);
     setActiveSlug("");
+    setActiveAuthorId("");
     setHomeCategoryFilterSlug("");
     setIsMenuOpen(false);
+  }
+
+  function openAuthorProfile(ownerId, options = {}) {
+    if (!ownerId) {
+      return;
+    }
+
+    const fallbackProject =
+      [...projects, ...myProjects].find((project) => project.owner_id === ownerId) || null;
+    const directoryEntry = authorRouteDirectory.find((author) => author.ownerId === ownerId);
+    const routeSegment =
+      directoryEntry?.routeSegment ||
+      getAuthorRouteSegment({
+        ownerId,
+        ownerEmail: fallbackProject?.owner_email || session?.user?.email || "",
+        profile: authorProfiles[ownerId] || (ownProfile?.owner_id === ownerId ? ownProfile : null),
+        project: fallbackProject,
+        sessionUser: session?.user?.id === ownerId ? session.user : null,
+        allAuthors: authorDirectory
+      });
+    const targetPath = `/profile/${encodeURIComponent(routeSegment)}`;
+
+    if (options?.newTab) {
+      window.open(targetPath, "_blank", "noopener,noreferrer");
+      return;
+    }
+
+    window.history.pushState({}, "", targetPath);
+    setActiveView("dashboard");
+    setActiveAuthorId(ownerId);
+    setActiveSlug("");
+    setActivePreviewId("");
+    setActiveCategorySlug("");
+    setHomeCategoryFilterSlug("");
+    setIsMenuOpen(false);
+    loadAuthorProfile(ownerId, fallbackProject);
   }
 
   function toggleHomeCategoryFilter(categoryName) {
@@ -1537,7 +2028,8 @@ function App() {
     session?.user?.user_metadata?.name ||
     session?.user?.email ||
     "Signed in";
-  const userAvatar = session?.user?.user_metadata?.avatar_url;
+  const headerProfile = ownProfile || (session?.user?.id ? authorProfiles[session.user.id] : null);
+  const userAvatar = headerProfile?.avatar_url || session?.user?.user_metadata?.avatar_url;
   const launchYear = new Date().getFullYear();
   const upcomingLaunchSlots = getUpcomingLaunchSlots();
   const uniqueProjectsForLaunchCapacity = Array.from(
@@ -1596,6 +2088,32 @@ function App() {
   const activeProject = activePreviewId
     ? previewProject || null
     : publicProjects.find((project) => slugify(project.title) === activeSlug);
+  const activeProjectAuthorProfile = activeProject?.owner_id
+    ? authorProfiles[activeProject.owner_id] ||
+      createFallbackProfile({
+        ownerId: activeProject.owner_id,
+        ownerEmail: activeProject.owner_email || "",
+        project: activeProject,
+        sessionUser: session?.user?.id === activeProject.owner_id ? session.user : null
+      })
+    : null;
+  const dashboardOwnerId = activeAuthorId || session?.user?.id || "";
+  const dashboardProjects = publicProjects.filter((project) => project.owner_id === dashboardOwnerId);
+  const dashboardFallbackProject =
+    dashboardProjects[0] ||
+    myProjects.find((project) => project.owner_id === dashboardOwnerId) ||
+    null;
+  const dashboardProfile =
+    authorProfiles[dashboardOwnerId] ||
+    (dashboardFallbackProject
+      ? createFallbackProfile({
+          ownerId: dashboardOwnerId,
+          ownerEmail: dashboardFallbackProject.owner_email || "",
+          project: dashboardFallbackProject,
+          sessionUser: session?.user?.id === dashboardOwnerId ? session.user : null
+        })
+      : null);
+  const isOwnDashboard = Boolean(session?.user?.id && dashboardOwnerId === session.user.id);
   const isPreviewProject = Boolean(activePreviewId);
   const currentLaunchWeek = getLaunchWeekFromDate(new Date());
   const currentLaunchRange = getLaunchSlotRange(currentLaunchWeek, launchYear);
@@ -1700,7 +2218,9 @@ function App() {
                       {isMenuOpen ? (
                         <Surface className="absolute right-0 top-[calc(100%+12px)] w-64 !bg-white !dark:bg-slate-950 !backdrop-blur-none p-2">
                           <div className="rounded-2xl px-3 py-3">
-                            <p className="text-sm font-semibold text-slate-950 dark:text-slate-100">{userName}</p>
+                            <p className="text-sm font-semibold text-slate-950 dark:text-slate-100">
+                              {headerProfile?.display_name || userName}
+                            </p>
                             <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{session.user.email}</p>
                           </div>
                           <button className="w-full rounded-2xl px-3 py-2 text-left text-sm font-medium text-slate-700 transition hover:bg-slate-50 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-100" onClick={openModal} type="button">
@@ -1739,8 +2259,19 @@ function App() {
               session={session}
               userName={userName}
               myProjects={myProjects}
+              ownProfile={ownProfile}
+              dashboardProfile={dashboardProfile}
+              dashboardProjects={isOwnDashboard ? myProjects : dashboardProjects}
+              isOwnDashboard={isOwnDashboard}
+              profileForm={profileForm}
+              profileLogoFile={profileLogoFile}
+              profileSaveStatus={profileSaveStatus}
+              profileSaveMessage={profileSaveMessage}
               dashboardSearchQuery={dashboardSearchQuery}
               handleDashboardSearchQueryChange={handleDashboardSearchQueryChange}
+              handleProfileInputChange={handleProfileInputChange}
+              handleProfileLogoFileChange={handleProfileLogoFileChange}
+              handleProfileSave={handleProfileSave}
               openHome={openHome}
               openModal={openModal}
               openProjectPreview={openProjectPreview}
@@ -1750,8 +2281,10 @@ function App() {
               deletingProjectId={deletingProjectId}
               restoringProjectId={restoringProjectId}
               openProject={openProject}
+              openAuthorProfile={openAuthorProfile}
               openCategoryPage={openCategoryPage}
               getProjectCategories={getProjectCategories}
+              profileLogoInputRef={profileLogoInputRef}
             />
           ) : activeView === "projects" ? (
             <ProjectsView
@@ -1776,9 +2309,11 @@ function App() {
           ) : activeView === "project" ? (
             <ProjectView
               activeProject={activeProject}
+              activeAuthorProfile={activeProjectAuthorProfile}
               isPreview={isPreviewProject}
               openHome={openHome}
               openCategoryPage={openCategoryPage}
+              openAuthorProfile={openAuthorProfile}
             />
           ) : activeView === "category" ? (
             <CategoryView
