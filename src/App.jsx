@@ -1246,6 +1246,11 @@ function App() {
     }));
   }
 
+  function resetProfileSaveFeedback() {
+    setProfileSaveStatus("idle");
+    setProfileSaveMessage("");
+  }
+
   function handleProfileLogoFileChange(event) {
     const file = event.target.files?.[0];
     if (!file) {
@@ -1450,14 +1455,12 @@ function App() {
     setFormData(initialForm);
     setLogoFile(null);
     setScreenshotFile(null);
-    setEditingProject(null);
     setSubmitStatus("success");
     setSubmitMessage(
       editingProject
         ? "Project updated successfully."
         : "Listing submitted for review."
     );
-    setIsModalOpen(false);
     if (!editingProject) {
       pushToast({
         tone: "info",
@@ -2172,6 +2175,7 @@ function App() {
               profileLogoFile={profileLogoFile}
               profileSaveStatus={profileSaveStatus}
               profileSaveMessage={profileSaveMessage}
+              resetProfileSaveFeedback={resetProfileSaveFeedback}
               dashboardSearchQuery={dashboardSearchQuery}
               handleDashboardSearchQueryChange={handleDashboardSearchQueryChange}
               handleProfileInputChange={handleProfileInputChange}

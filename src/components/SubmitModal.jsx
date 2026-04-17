@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { ModalStep, Surface } from "./ui";
+import { ModalStep, SuccessOverlay, Surface } from "./ui";
 
 export default function SubmitModal({
   isOpen,
@@ -54,6 +54,20 @@ export default function SubmitModal({
   }, [isOpen, modalStep]);
 
   useEffect(() => {
+    if (!isOpen || submitStatus !== "success") {
+      return undefined;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      closeModal();
+    }, 1350);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [closeModal, isOpen, submitStatus]);
+
+  useEffect(() => {
     if (!isOpen) {
       document.body.style.overflow = "";
       document.documentElement.style.overflow = "";
@@ -84,7 +98,12 @@ export default function SubmitModal({
         aria-modal="true"
         aria-labelledby="submit-project-title"
       >
-        <Surface className="overflow-hidden p-6 sm:p-8">
+        <Surface className="relative overflow-hidden p-6 sm:p-8">
+          <SuccessOverlay
+            isVisible={submitStatus === "success"}
+            title={editingProject ? "Saved" : "Submitted"}
+            description={submitMessage}
+          />
           <div className="flex flex-col gap-6">
             <div className="flex items-start justify-between gap-4">
               <div className="space-y-3">
@@ -403,9 +422,6 @@ export default function SubmitModal({
                       </div>
                     ) : null}
                   </div>
-                  <p className="mt-3 text-sm leading-6 text-slate-500">
-                    Each week has {visibleLaunchSlots[0]?.capacity || 12} regular spots. The badge shows booked spots as x/12.
-                  </p>
                   {launchWeekSummary ? (
                     <div className="mt-4 inline-flex items-center rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-slate-600">
                       {launchWeekSummary}

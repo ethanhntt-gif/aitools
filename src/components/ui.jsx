@@ -1,4 +1,5 @@
 import React from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { ArrowUpRightIcon } from "./icons";
 
 export function Surface({ className = "", children }) {
@@ -243,5 +244,64 @@ export function ToastStack({ toasts, onDismiss }) {
         </div>
       ))}
     </div>
+  );
+}
+
+export function SuccessOverlay({ isVisible, title, description = "" }) {
+  return (
+    <AnimatePresence>
+      {isVisible ? (
+        <motion.div
+          animate={{ opacity: 1 }}
+          className="absolute inset-0 z-20 flex items-center justify-center bg-white/70 p-6 backdrop-blur-md dark:bg-slate-950/75"
+          exit={{ opacity: 0 }}
+          initial={{ opacity: 0 }}
+          transition={{ duration: 0.22 }}
+        >
+          <motion.div
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            className="flex max-w-sm flex-col items-center text-center"
+            exit={{ opacity: 0, y: 10, scale: 0.96 }}
+            initial={{ opacity: 0, y: 18, scale: 0.92 }}
+            transition={{ type: "spring", stiffness: 240, damping: 20 }}
+          >
+            <motion.div
+              animate={{ scale: 1, rotate: 0 }}
+              className="flex h-20 w-20 items-center justify-center rounded-full bg-emerald-500 text-white shadow-[0_24px_60px_-30px_rgba(16,185,129,0.75)]"
+              initial={{ scale: 0.75, rotate: -12 }}
+              transition={{ type: "spring", stiffness: 260, damping: 16, delay: 0.08 }}
+            >
+              <svg aria-hidden="true" className="h-10 w-10" viewBox="0 0 24 24" fill="none">
+                <path
+                  d="M6.5 12.5 10.2 16 17.5 8.5"
+                  stroke="currentColor"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2.5"
+                />
+              </svg>
+            </motion.div>
+            <motion.p
+              animate={{ opacity: 1, y: 0 }}
+              className="mt-6 text-2xl font-semibold tracking-tight text-slate-950 dark:text-slate-100"
+              initial={{ opacity: 0, y: 10 }}
+              transition={{ delay: 0.14, duration: 0.22 }}
+            >
+              {title}
+            </motion.p>
+            {description ? (
+              <motion.p
+                animate={{ opacity: 1, y: 0 }}
+                className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300"
+                initial={{ opacity: 0, y: 10 }}
+                transition={{ delay: 0.2, duration: 0.22 }}
+              >
+                {description}
+              </motion.p>
+            ) : null}
+          </motion.div>
+        </motion.div>
+      ) : null}
+    </AnimatePresence>
   );
 }

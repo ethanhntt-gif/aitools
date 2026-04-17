@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { ArrowUpRightIcon, EyeIcon, PenIcon, RefreshIcon, SearchIcon, TrashIcon } from "./icons";
-import { EmptyState, SectionIntro, StatCard, Surface, ToolCard } from "./ui";
+import { EmptyState, SectionIntro, StatCard, SuccessOverlay, Surface, ToolCard } from "./ui";
 
 function formatAuthorName(ownerEmail) {
   if (!ownerEmail) {
@@ -180,6 +180,7 @@ export function DashboardView({
   profileLogoFile,
   profileSaveStatus,
   profileSaveMessage,
+  resetProfileSaveFeedback,
   dashboardSearchQuery,
   handleDashboardSearchQueryChange,
   handleProfileInputChange,
@@ -237,6 +238,20 @@ export function DashboardView({
     };
   }, [isProfileEditorOpen]);
 
+  useEffect(() => {
+    if (!isProfileEditorOpen || profileSaveStatus !== "success") {
+      return undefined;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setIsProfileEditorOpen(false);
+    }, 1350);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [isProfileEditorOpen, profileSaveStatus]);
+
   return (
     <section className="space-y-6">
       <SectionIntro eyebrow="" title={isOwnDashboard ? "Your dashboard" : profileName} description="" action={<button className="inline-flex items-center justify-center rounded-full border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white dark:border-slate-700 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-900 dark:hover:text-slate-100" onClick={openHome} type="button">Back to weekly launch</button>} />
@@ -258,7 +273,14 @@ export function DashboardView({
             <div className="pointer-events-none absolute inset-y-0 right-0 flex translate-x-3 items-center px-6 opacity-0 transition duration-200 group-hover:translate-x-0 group-hover:opacity-100 group-focus-within:translate-x-0 group-focus-within:opacity-100 sm:px-8">
               <div className="pointer-events-auto flex flex-col items-end gap-3">
                 {isOwnDashboard ? (
-                  <button className="inline-flex items-center justify-center rounded-full bg-white px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-sky-50" onClick={() => setIsProfileEditorOpen(true)} type="button">
+                  <button
+                    className="inline-flex items-center justify-center rounded-full bg-white px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-sky-50"
+                    onClick={() => {
+                      resetProfileSaveFeedback();
+                      setIsProfileEditorOpen(true);
+                    }}
+                    type="button"
+                  >
                     Edit profile
                   </button>
                 ) : null}
@@ -286,7 +308,12 @@ export function DashboardView({
       {isOwnDashboard && isProfileEditorOpen ? (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/55 px-4 py-10 backdrop-blur-sm" onClick={() => setIsProfileEditorOpen(false)} role="presentation">
           <div className="mx-auto w-full max-w-3xl" onClick={(event) => event.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="edit-profile-title">
-            <Surface className="overflow-hidden p-6 sm:p-8">
+            <Surface className="relative overflow-hidden p-6 sm:p-8">
+              <SuccessOverlay
+                isVisible={profileSaveStatus === "success"}
+                title="Saved"
+                description={profileSaveMessage}
+              />
               <div className="flex items-start justify-between gap-4">
                 <div className="space-y-3">
                   <p className="text-xs font-semibold uppercase tracking-[0.28em] text-sky-600 dark:text-sky-400">Public author profile</p>
@@ -296,12 +323,7 @@ export function DashboardView({
                   Close
                 </button>
               </div>
-              <form className="mt-6 grid gap-5 lg:grid-cols-2" onSubmit={async (event) => {
-                await handleProfileSave(event);
-                if (profileSaveStatus !== "error") {
-                  setIsProfileEditorOpen(false);
-                }
-              }}>
+              <form className="mt-6 grid gap-5 lg:grid-cols-2" onSubmit={handleProfileSave}>
                 <input ref={profileLogoInputRef} accept="image/*" className="hidden" onChange={handleProfileLogoFileChange} type="file" />
                 <div className="lg:col-span-2 grid gap-5 md:grid-cols-[180px_minmax(0,1fr)]">
                   <button className="flex min-h-[180px] items-center justify-center overflow-hidden rounded-[24px] border border-dashed border-slate-300 bg-slate-50 text-slate-500 transition hover:border-sky-400 hover:bg-sky-50" onClick={() => profileLogoInputRef.current?.click()} type="button">
