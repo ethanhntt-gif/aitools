@@ -150,9 +150,9 @@ export default function SubmitModal({
               {modalStep === 1 ? (
                 <div className="grid gap-5 sm:grid-cols-2">
                   <label className="space-y-2 sm:col-span-1">
-                    <span className="text-sm font-semibold text-slate-700">Project title</span>
+                    <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Project title</span>
                     <input
-                      className={getFieldClassName("title", "w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100")}
+                      className={getFieldClassName("title", "w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-sky-400 focus:ring-4 focus:ring-sky-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:ring-sky-500/20")}
                       name="title"
                       value={formData.title}
                       onChange={handleInputChange}
@@ -163,9 +163,9 @@ export default function SubmitModal({
                   </label>
 
                   <label className="space-y-2 sm:col-span-1">
-                    <span className="text-sm font-semibold text-slate-700">Project URL</span>
+                    <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Project URL</span>
                     <input
-                      className={getFieldClassName("project_url", "w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100")}
+                      className={getFieldClassName("project_url", "w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-sky-400 focus:ring-4 focus:ring-sky-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:ring-sky-500/20")}
                       name="project_url"
                       value={formData.project_url}
                       onChange={handleInputChange}
@@ -176,25 +176,25 @@ export default function SubmitModal({
                   </label>
 
                   <label className="space-y-2 sm:col-span-1">
-                    <span className="text-sm font-semibold text-slate-700">Pricing</span>
+                    <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Pricing</span>
                     <div className="relative" ref={pricingMenuRef}>
                       <button
                         aria-expanded={isPricingMenuOpen}
                         aria-haspopup="listbox"
-                        className={`flex w-full items-center justify-between rounded-2xl border bg-white px-4 py-3 text-left text-sm transition ${
+                        className={`flex w-full items-center justify-between rounded-2xl border bg-white px-4 py-3 text-left text-sm transition dark:bg-slate-950 ${
                           invalidFields?.pricing_model
                             ? "border-rose-400 ring-4 ring-rose-100"
                             : isPricingMenuOpen
-                              ? "border-sky-400 ring-4 ring-sky-100"
-                              : "border-slate-200 hover:border-slate-300"
+                              ? "border-sky-400 ring-4 ring-sky-100 dark:ring-sky-500/20"
+                              : "border-slate-200 hover:border-slate-300 dark:border-slate-700 dark:hover:border-slate-600"
                         }`}
                         onClick={togglePricingMenu}
                         type="button"
                       >
-                        <span className={selectedPricingLabel ? "text-slate-900" : "text-slate-400"}>
+                        <span className={selectedPricingLabel ? "text-slate-900 dark:text-slate-100" : "text-slate-400 dark:text-slate-500"}>
                           {selectedPricingLabel || "Choose pricing"}
                         </span>
-                        <span className="text-slate-400">{isPricingMenuOpen ? "-" : "+"}</span>
+                        <span className="text-slate-400 dark:text-slate-500">{isPricingMenuOpen ? "-" : "+"}</span>
                       </button>
                       {isPricingMenuOpen ? (
                         <Surface className="absolute left-0 right-0 top-[calc(100%+12px)] z-10 p-2">
@@ -207,8 +207,8 @@ export default function SubmitModal({
                                   key={pricingValue}
                                   className={`flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left text-sm transition ${
                                     isSelected
-                                      ? "bg-sky-50 text-sky-700"
-                                      : "text-slate-600 hover:bg-slate-50"
+                                      ? "bg-sky-50 text-sky-700 dark:bg-sky-500/10 dark:text-sky-300"
+                                      : "text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800"
                                   }`}
                                   onClick={() => selectPricingModel(pricingValue)}
                                   aria-selected={isSelected}
@@ -230,27 +230,27 @@ export default function SubmitModal({
                   </label>
 
                   <label className="space-y-2 sm:col-span-1">
-                    <span className="text-sm font-semibold text-slate-700">Category</span>
+                    <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Category</span>
                     <div className="relative" ref={categoryMenuRef}>
                       <button
                         aria-expanded={isCategoryMenuOpen}
                         aria-haspopup="listbox"
-                        className={`flex w-full items-center justify-between rounded-2xl border bg-white px-4 py-3 text-left text-sm transition ${
+                        className={`flex w-full items-center justify-between rounded-2xl border bg-white px-4 py-3 text-left text-sm transition dark:bg-slate-950 ${
                           invalidFields?.category
                             ? "border-rose-400 ring-4 ring-rose-100"
                             : isCategoryMenuOpen
-                              ? "border-sky-400 ring-4 ring-sky-100"
-                              : "border-slate-200 hover:border-slate-300"
+                              ? "border-sky-400 ring-4 ring-sky-100 dark:ring-sky-500/20"
+                              : "border-slate-200 hover:border-slate-300 dark:border-slate-700 dark:hover:border-slate-600"
                         }`}
                         onClick={toggleCategoryMenu}
                         type="button"
                       >
-                        <span className={formData.category.length ? "text-slate-900" : "text-slate-400"}>
+                        <span className={formData.category.length ? "text-slate-900 dark:text-slate-100" : "text-slate-400 dark:text-slate-500"}>
                           {selectedCategoryNames.length ? selectedCategoryNames.join(", ") : "Choose categories"}
                         </span>
-                        <span className="text-slate-400">{isCategoryMenuOpen ? "-" : "+"}</span>
+                        <span className="text-slate-400 dark:text-slate-500">{isCategoryMenuOpen ? "-" : "+"}</span>
                       </button>
-                      <p className="mt-2 text-xs text-slate-500">
+                      <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
                         Choose up to {maxCategories} categories. Selected: {formData.category.length}/{maxCategories}
                       </p>
                       {invalidFields?.category ? <p className="mt-2 text-sm text-rose-600">Choose at least one category.</p> : null}
@@ -268,10 +268,10 @@ export default function SubmitModal({
                                 key={categoryOption.id}
                                 className={`flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left text-sm transition ${
                                   isSelected
-                                    ? "bg-sky-50 text-sky-700"
+                                    ? "bg-sky-50 text-sky-700 dark:bg-sky-500/10 dark:text-sky-300"
                                     : isDisabled
-                                      ? "cursor-not-allowed text-slate-300"
-                                      : "text-slate-600 hover:bg-slate-50"
+                                      ? "cursor-not-allowed text-slate-300 dark:text-slate-600"
+                                      : "text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800"
                                 }`}
                                 disabled={isDisabled}
                                 onClick={() => selectCategory(categoryOption)}
@@ -294,9 +294,9 @@ export default function SubmitModal({
                   </label>
 
                   <label className="space-y-2 sm:col-span-2">
-                    <span className="text-sm font-semibold text-slate-700">Slogan</span>
+                    <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Slogan</span>
                     <input
-                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
+                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-sky-400 focus:ring-4 focus:ring-sky-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:ring-sky-500/20"
                       name="slogan"
                       value={formData.slogan}
                       onChange={handleInputChange}
@@ -306,9 +306,9 @@ export default function SubmitModal({
                   </label>
 
                   <label className="space-y-2 sm:col-span-2">
-                    <span className="text-sm font-semibold text-slate-700">Description</span>
+                    <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Description</span>
                     <textarea
-                      className={getFieldClassName("description", "min-h-36 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100")}
+                      className={getFieldClassName("description", "min-h-36 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-sky-400 focus:ring-4 focus:ring-sky-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:ring-sky-500/20")}
                       name="description"
                       value={formData.description}
                       onChange={handleInputChange}
@@ -342,13 +342,13 @@ export default function SubmitModal({
                       className={`rounded-[24px] border border-dashed px-6 py-8 text-left transition ${
                         invalidFields?.logo_url
                           ? "border-rose-400 bg-rose-50"
-                          : "border-slate-300 bg-slate-50 hover:border-sky-400 hover:bg-sky-50"
+                          : "border-slate-300 bg-slate-50 hover:border-sky-400 hover:bg-sky-50 dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800"
                       }`}
                       onClick={() => handleDropZoneClick("logo_url")}
                       type="button"
                     >
-                      <strong className="block text-base font-semibold text-slate-950">Logo</strong>
-                      <span className="mt-2 block text-sm leading-6 text-slate-500">
+                      <strong className="block text-base font-semibold text-slate-950 dark:text-slate-100">Logo</strong>
+                      <span className="mt-2 block text-sm leading-6 text-slate-500 dark:text-slate-400">
                         {logoFile
                           ? logoFile.name
                           : formData.logo_url
@@ -361,13 +361,13 @@ export default function SubmitModal({
                       className={`rounded-[24px] border border-dashed px-6 py-8 text-left transition ${
                         invalidFields?.image_url
                           ? "border-rose-400 bg-rose-50"
-                          : "border-slate-300 bg-slate-50 hover:border-sky-400 hover:bg-sky-50"
+                          : "border-slate-300 bg-slate-50 hover:border-sky-400 hover:bg-sky-50 dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800"
                       }`}
                       onClick={() => handleDropZoneClick("image_url")}
                       type="button"
                     >
-                      <strong className="block text-base font-semibold text-slate-950">Screenshot</strong>
-                      <span className="mt-2 block text-sm leading-6 text-slate-500">
+                      <strong className="block text-base font-semibold text-slate-950 dark:text-slate-100">Screenshot</strong>
+                      <span className="mt-2 block text-sm leading-6 text-slate-500 dark:text-slate-400">
                         {screenshotFile
                           ? screenshotFile.name
                           : formData.image_url
@@ -385,8 +385,8 @@ export default function SubmitModal({
 
                   <div className="grid gap-5 md:grid-cols-2">
                     <Surface className="p-5">
-                      <span className="text-sm font-semibold text-slate-500">Logo preview</span>
-                      <div className="mt-4 flex min-h-52 items-center justify-center rounded-[20px] bg-slate-50 p-5">
+                      <span className="text-sm font-semibold text-slate-500 dark:text-slate-400">Logo preview</span>
+                      <div className="mt-4 flex min-h-52 items-center justify-center rounded-[20px] bg-slate-50 p-5 dark:bg-slate-950">
                         {logoFile ? (
                           <img
                             alt="Logo preview"
@@ -400,13 +400,13 @@ export default function SubmitModal({
                             src={formData.logo_url}
                           />
                         ) : (
-                          <div className="text-sm text-slate-400">No logo selected</div>
+                          <div className="text-sm text-slate-400 dark:text-slate-500">No logo selected</div>
                         )}
                       </div>
                     </Surface>
                     <Surface className="p-5">
-                      <span className="text-sm font-semibold text-slate-500">Screenshot preview</span>
-                      <div className="mt-4 flex min-h-52 items-center justify-center rounded-[20px] bg-slate-50 p-3">
+                      <span className="text-sm font-semibold text-slate-500 dark:text-slate-400">Screenshot preview</span>
+                      <div className="mt-4 flex min-h-52 items-center justify-center rounded-[20px] bg-slate-50 p-3 dark:bg-slate-950">
                         {screenshotFile ? (
                           <img
                             alt="Screenshot preview"
@@ -420,7 +420,7 @@ export default function SubmitModal({
                             src={formData.image_url}
                           />
                         ) : (
-                          <div className="text-sm text-slate-400">No screenshot selected</div>
+                          <div className="text-sm text-slate-400 dark:text-slate-500">No screenshot selected</div>
                         )}
                       </div>
                     </Surface>
@@ -431,7 +431,7 @@ export default function SubmitModal({
               {modalStep === 3 ? (
                 <Surface className={`p-6 ${invalidFields?.launch_week ? "ring-2 ring-rose-300" : ""}`}>
                   <div className="space-y-2">
-                    <span className="text-sm font-semibold text-slate-700">Upcoming launch slots</span>
+                    <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Upcoming launch slots</span>
                     <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
                       {visibleLaunchSlots.map((slot) => {
                         const isSelected = String(slot.week) === String(formData.launch_week);
@@ -444,10 +444,10 @@ export default function SubmitModal({
                             key={`${slot.week}-${slot.dateValue}`}
                             className={`rounded-[18px] border px-3.5 py-3 text-left transition ${
                               isSelected
-                                ? "border-sky-300 bg-sky-50 text-sky-700 ring-2 ring-sky-100"
+                                ? "border-sky-300 bg-sky-50 text-sky-700 ring-2 ring-sky-100 dark:bg-sky-500/10 dark:text-sky-300 dark:ring-sky-500/20"
                                 : isFull
-                                  ? "border-slate-200 bg-slate-100 text-slate-400 opacity-80"
-                                  : "border-emerald-200 bg-emerald-50 text-emerald-800 hover:border-emerald-300 hover:bg-emerald-100"
+                                  ? "border-slate-200 bg-slate-100 text-slate-400 opacity-80 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-500"
+                                  : "border-emerald-200 bg-emerald-50 text-emerald-800 hover:border-emerald-300 hover:bg-emerald-100 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300 dark:hover:bg-emerald-500/20"
                             }`}
                             disabled={isDisabled}
                             onClick={() => handleInputChange({ target: { name: "launch_week", value: String(slot.week) } })}
@@ -504,7 +504,7 @@ export default function SubmitModal({
                     {hasHiddenLaunchSlots ? (
                       <div className="pt-2">
                         <button
-                          className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-950"
+                          className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-950 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-100"
                           onClick={() => setShowAllLaunchSlots(true)}
                           type="button"
                         >
@@ -514,12 +514,12 @@ export default function SubmitModal({
                     ) : null}
                   </div>
                   {launchWeekSummary ? (
-                    <div className="mt-4 inline-flex items-center rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-slate-600">
+                    <div className="mt-4 inline-flex items-center rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-slate-600 dark:bg-slate-800 dark:text-slate-300">
                       {launchWeekSummary}
                     </div>
                   ) : null}
                   {!launchSlotOptions.length ? (
-                    <p className="mt-3 text-sm text-slate-500">
+                    <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">
                       No launch slots are available for the rest of this year yet.
                     </p>
                   ) : null}
@@ -540,7 +540,7 @@ export default function SubmitModal({
                 <div className="flex flex-wrap gap-3">
                   {modalStep > 1 ? (
                     <button
-                      className="inline-flex items-center justify-center rounded-full border border-slate-200 px-5 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+                      className="inline-flex items-center justify-center rounded-full border border-slate-200 px-5 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-100"
                       onClick={handlePreviousStep}
                       type="button"
                     >
