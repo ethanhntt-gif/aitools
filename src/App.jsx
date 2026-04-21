@@ -5,503 +5,56 @@ import { MoonIcon, SparklesIcon, SunIcon } from "./components/icons";
 import { CategoryView, DashboardView, LegalPageView, ProjectView, ProjectsView } from "./components/SecondaryViews";
 import SubmitModal from "./components/SubmitModal";
 import { Surface, ToastStack } from "./components/ui";
+import useAppRouter from "./hooks/useAppRouter";
+import {
+  approvalToastCacheKey,
+  demoVotesCacheKey,
+  initialForm,
+  initialProfileForm,
+  initialVisibleProjectsCount,
+  launchWeekCapacity,
+  maxCategories,
+  projectsCacheKey,
+  storageBucket,
+  themePreferenceKey,
+  totalModalSteps
+} from "./constants/app";
+import { demoProfiles, demoProjects } from "./data/demo-content";
+import {
+  createDefaultCategoryOptions,
+  createFallbackProfile,
+  formatLaunchSlotDate,
+  getCategorySlug,
+  getLaunchDateValueFromWeek,
+  getLaunchSlotRange,
+  getLaunchWeekFromDate,
+  getProjectCategoryIds,
+  getProjectCategoryNames,
+  getSelectedCategoryNames,
+  getUpcomingLaunchSlots,
+  isCategoryMigrationMissing,
+  isLaunchScheduleMigrationMissing,
+  isPricingMigrationMissing,
+  isProfileMigrationMissing,
+  isVotingMigrationMissing,
+  mapCategoryNamesToIds,
+  normalizeNumericId,
+  normalizeProfile,
+  normalizeProject,
+  slugify
+} from "./lib/app-utils";
+import {
+  getCategoryCounts,
+  getCategoryFilteredProjects,
+  getCategoryProjects,
+  getCurrentLaunchProjects,
+  getFilteredProjectsBySearch,
+  getLaunchWeekCounts,
+  getProjectsWithVotes,
+  getPublicProjects
+} from "./lib/project-selectors";
 import privacyPolicyContent from "../Privacy Policy.md?raw";
 import termsOfServiceContent from "../Terms of Service.md?raw";
-
-const initialForm = {
-  title: "",
-  slogan: "",
-  description: "",
-  category: [],
-  pricing_model: "",
-  project_url: "",
-  image_url: "",
-  logo_url: "",
-  launch_week: ""
-};
-
-const initialProfileForm = {
-  display_name: "",
-  bio: "",
-  avatar_url: ""
-};
-
-const storageBucket = "project-assets";
-const totalModalSteps = 3;
-const maxCategories = 5;
-const launchWeekCapacity = 12;
-const initialVisibleProjectsCount = 21;
-const projectsCacheKey = "aitools.projects-cache.v1";
-const approvalToastCacheKey = "aitools.approval-toasts.v1";
-const themePreferenceKey = "aitools.theme-preference.v1";
-const demoVotesCacheKey = "aitools.demo-votes.v1";
-const millisecondsInWeek = 7 * 24 * 60 * 60 * 1000;
-
-const defaultCategoryNames = [
-  "Automation",
-  "AI Agents",
-  "Content",
-  "Marketing",
-  "Sales",
-  "Customer Support",
-  "Productivity",
-  "Analytics",
-  "Research",
-  "Coding",
-  "Design",
-  "Education",
-  "Video",
-  "Audio",
-  "Image Generation",
-  "Data",
-  "Finance",
-  "Healthcare",
-  "Recruiting",
-  "Other"
-];
-
-const pricingModelOptions = ["free", "freemium", "paid"];
-
-function slugify(value) {
-  return value
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
-
-function normalizeNumericId(value) {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return value;
-  }
-
-  if (typeof value === "string" && /^\d+$/.test(value.trim())) {
-    return Number(value);
-  }
-
-  return value;
-}
-
-function normalizePricingModel(value) {
-  const normalizedValue = String(value || "").trim().toLowerCase();
-  return pricingModelOptions.includes(normalizedValue) ? normalizedValue : "";
-}
-
-function getCategoryList(categoryValue) {
-  if (Array.isArray(categoryValue)) {
-    return categoryValue
-      .map((item) => {
-        if (!item) {
-          return "";
-        }
-
-        if (typeof item === "string") {
-          return item;
-        }
-
-        if (typeof item === "object" && item.name) {
-          return item.name;
-        }
-
-        return "";
-      })
-      .filter(Boolean);
-  }
-
-  if (!categoryValue) {
-    return [];
-  }
-
-  return String(categoryValue)
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
-function getCategorySlug(categoryValue) {
-  return slugify(categoryValue);
-}
-
-function createDefaultCategoryOptions() {
-  return defaultCategoryNames.map((name) => ({
-    id: `default-${slugify(name)}`,
-    name,
-    slug: slugify(name)
-  }));
-}
-
-function getSelectedCategoryNames(categoryIds, availableCategories) {
-  const categoryMap = new Map(availableCategories.map((category) => [category.id, category.name]));
-
-  return categoryIds
-    .map((categoryId) => categoryMap.get(categoryId))
-    .filter(Boolean);
-}
-
-function getProjectCategoryIds(project) {
-  if (Array.isArray(project?.categories) && project.categories.length) {
-    return project.categories.map((category) => category.id).filter(Boolean);
-  }
-
-  return [];
-}
-
-function getProjectCategoryNames(project) {
-  if (Array.isArray(project?.categories) && project.categories.length) {
-    return project.categories.map((category) => category.name).filter(Boolean);
-  }
-
-  return getCategoryList(project?.category);
-}
-
-function mapCategoryNamesToIds(categoryNames, availableCategories) {
-  const categoryMap = new Map(
-    availableCategories.map((category) => [category.name.toLowerCase(), category.id])
-  );
-
-  return categoryNames
-    .map((categoryName) => categoryMap.get(String(categoryName).toLowerCase()))
-    .filter(Boolean);
-}
-
-function isCategoryMigrationMissing(error) {
-  const message = error?.message?.toLowerCase() || "";
-
-  return (
-    message.includes("'category' column") ||
-    message.includes("project_categories") ||
-    message.includes("categories") ||
-    message.includes("relationship") ||
-    message.includes("schema cache")
-  );
-}
-
-function isLaunchScheduleMigrationMissing(error) {
-  const message = error?.message?.toLowerCase() || "";
-
-  return (
-    message.includes("launch_week")
-  );
-}
-
-function isPricingMigrationMissing(error) {
-  const message = error?.message?.toLowerCase() || "";
-
-  return message.includes("pricing_model");
-}
-
-function isVotingMigrationMissing(error) {
-  const message = error?.message?.toLowerCase() || "";
-
-  return message.includes("project_votes") || message.includes("vote");
-}
-
-function isProfileMigrationMissing(error) {
-  const message = error?.message?.toLowerCase() || "";
-
-  return message.includes("profiles");
-}
-
-function formatAuthorNameValue(ownerEmail) {
-  if (!ownerEmail) {
-    return "Unknown author";
-  }
-
-  const localPart = ownerEmail.split("@")[0] || ownerEmail;
-
-  return localPart
-    .split(/[._-]+/)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
-}
-
-function getAuthorDisplayName({
-  ownerId = "",
-  ownerEmail = "",
-  profile = null,
-  project = null,
-  sessionUser = null
-} = {}) {
-  const metadata = sessionUser?.user_metadata || {};
-
-  return (
-    profile?.display_name ||
-    metadata.full_name ||
-    metadata.name ||
-    formatAuthorNameValue(ownerEmail) ||
-    project?.title ||
-    ownerId ||
-    "Unknown author"
-  );
-}
-
-function createFallbackProfile({ ownerId = "", ownerEmail = "", project = null, sessionUser = null } = {}) {
-  const metadata = sessionUser?.user_metadata || {};
-  const fallbackName = getAuthorDisplayName({
-    ownerId,
-    ownerEmail,
-    project,
-    sessionUser
-  });
-
-  return {
-    owner_id: ownerId,
-    owner_email: ownerEmail,
-    display_name: fallbackName,
-    bio: "",
-    avatar_url: metadata.avatar_url || "",
-    created_at: null,
-    updated_at: null
-  };
-}
-
-function normalizeProfile(profile, fallback = {}) {
-  return {
-    owner_id: profile?.owner_id || fallback.owner_id || "",
-    owner_email: profile?.owner_email || fallback.owner_email || "",
-    display_name: profile?.display_name || fallback.display_name || "",
-    bio: profile?.bio || "",
-    avatar_url: profile?.avatar_url || fallback.avatar_url || "",
-    created_at: profile?.created_at || null,
-    updated_at: profile?.updated_at || null
-  };
-}
-
-function getFirstWednesdayOfYear(year) {
-  const januaryFirst = new Date(Date.UTC(year, 0, 1));
-  const dayOffset = (3 - januaryFirst.getUTCDay() + 7) % 7;
-  januaryFirst.setUTCDate(januaryFirst.getUTCDate() + dayOffset);
-  return januaryFirst;
-}
-
-function getLaunchWeekFromDate(baseDate = new Date()) {
-  const normalizedDate = new Date(Date.UTC(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate()));
-  const firstWednesday = getFirstWednesdayOfYear(normalizedDate.getUTCFullYear());
-
-  if (normalizedDate < firstWednesday) {
-    return 1;
-  }
-
-  return Math.floor((normalizedDate - firstWednesday) / millisecondsInWeek) + 1;
-}
-
-function formatDateValue(date) {
-  return date.toISOString().slice(0, 10);
-}
-
-function getLaunchDateValueFromWeek(launchWeek, year = new Date().getFullYear()) {
-  const normalizedWeek = Number(launchWeek);
-
-  if (!normalizedWeek || normalizedWeek < 1) {
-    return "";
-  }
-
-  const normalizedYear = Number(year);
-  const firstWednesday = getFirstWednesdayOfYear(normalizedYear);
-  firstWednesday.setUTCDate(firstWednesday.getUTCDate() + (normalizedWeek - 1) * 7);
-  return formatDateValue(firstWednesday);
-}
-
-function formatLaunchSlotDate(dateValue) {
-  if (!dateValue) {
-    return "";
-  }
-
-  const parsedDate = new Date(`${dateValue}T00:00:00`);
-
-  if (Number.isNaN(parsedDate.getTime())) {
-    return "";
-  }
-
-  return parsedDate.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric"
-  });
-}
-
-function getLaunchSlotRange(launchWeek, year = new Date().getFullYear()) {
-  const startDateValue = getLaunchDateValueFromWeek(launchWeek, year);
-
-  if (!startDateValue) {
-    return {
-      startDateValue: "",
-      endDateValue: "",
-      startDateLabel: "",
-      endDateLabel: ""
-    };
-  }
-
-  const startDate = new Date(`${startDateValue}T00:00:00`);
-
-  if (Number.isNaN(startDate.getTime())) {
-    return {
-      startDateValue: "",
-      endDateValue: "",
-      startDateLabel: "",
-      endDateLabel: ""
-    };
-  }
-
-  const endDate = new Date(startDate);
-  endDate.setDate(endDate.getDate() + 6);
-
-  const endDateValue = formatDateValue(endDate);
-
-  return {
-    startDateValue,
-    endDateValue,
-    startDateLabel: formatLaunchSlotDate(startDateValue),
-    endDateLabel: formatLaunchSlotDate(endDateValue)
-  };
-}
-
-function getUpcomingLaunchSlots(baseDate = new Date()) {
-  const launchYear = baseDate.getFullYear();
-  const firstWednesday = getFirstWednesdayOfYear(launchYear);
-  const todayUtc = new Date(Date.UTC(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate()));
-  const firstUpcomingSlot = new Date(firstWednesday);
-
-  while (firstUpcomingSlot < todayUtc) {
-    firstUpcomingSlot.setUTCDate(firstUpcomingSlot.getUTCDate() + 7);
-  }
-
-  if (firstUpcomingSlot.getUTCFullYear() !== launchYear) {
-    return [];
-  }
-
-  const slots = [];
-  const currentSlot = new Date(firstUpcomingSlot);
-
-  while (currentSlot.getUTCFullYear() === launchYear) {
-    const weekNumber = Math.floor((currentSlot - firstWednesday) / millisecondsInWeek) + 1;
-    const { startDateValue, endDateValue, startDateLabel, endDateLabel } = getLaunchSlotRange(
-      weekNumber,
-      launchYear
-    );
-
-    slots.push({
-      week: weekNumber,
-      dateValue: formatDateValue(currentSlot),
-      dateLabel: formatLaunchSlotDate(formatDateValue(currentSlot)),
-      startDateValue,
-      endDateValue,
-      startDateLabel,
-      endDateLabel
-    });
-
-    currentSlot.setUTCDate(currentSlot.getUTCDate() + 7);
-  }
-
-  return slots;
-}
-
-function normalizeProject(project) {
-  const relationalCategories = Array.isArray(project?.project_categories)
-    ? project.project_categories
-        .map((entry) => entry?.category ?? entry?.categories ?? entry)
-        .filter((category) => category?.id && category?.name)
-        .map((category) => ({
-          id: category.id,
-          name: category.name,
-          slug: category.slug || slugify(category.name)
-        }))
-    : [];
-
-  return {
-    ...project,
-    id: normalizeNumericId(project?.id),
-    categories: relationalCategories,
-    published: Boolean(project?.published),
-    deleted: Boolean(project?.deleted),
-    created_at: project?.created_at || null,
-    launch_week: project?.launch_week ? Number(project.launch_week) : null,
-    launch_date: project?.launch_date || getLaunchDateValueFromWeek(project?.launch_week) || "",
-    pricing_model: normalizePricingModel(project?.pricing_model),
-    vote_count: Number(project?.vote_count) || 0
-  };
-}
-
-const demoProjects = [
-  {
-    id: 1,
-    owner_id: "demo-author-1",
-    title: "AI Outreach Assistant",
-    slogan: "Prospecting and follow-ups on autopilot.",
-    description: "Automates prospect research, drafts outreach, and tracks conversations.",
-    category: "Automation",
-    pricing_model: "freemium",
-    owner_email: "alex@aitools.dev",
-    project_url: "#",
-    image_url:
-      "https://images.unsplash.com/photo-1526379095098-d400fd0bf935?auto=format&fit=crop&w=900&q=80",
-    published: true,
-    created_at: "2026-04-01T10:00:00.000Z",
-    launch_week: getLaunchWeekFromDate(new Date()),
-    vote_count: 24
-  },
-  {
-    id: 2,
-    owner_id: "demo-author-2",
-    title: "Content Studio",
-    slogan: "From brief to launch-ready content in minutes.",
-    description: "Turns briefs into social posts, blog outlines, and campaign assets in minutes.",
-    category: "Content",
-    pricing_model: "paid",
-    owner_email: "maya@aitools.dev",
-    project_url: "#",
-    image_url:
-      "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=900&q=80",
-    published: true,
-    created_at: "2026-04-03T10:00:00.000Z",
-    launch_week: getLaunchWeekFromDate(new Date()),
-    vote_count: 19
-  },
-  {
-    id: 3,
-    owner_id: "demo-author-3",
-    title: "Support Copilot",
-    slogan: "Faster replies, calmer queues, better support.",
-    description: "Suggests support replies, summarizes tickets, and surfaces urgent issues.",
-    category: "Customer Care",
-    pricing_model: "free",
-    owner_email: "ethan@aitools.dev",
-    project_url: "#",
-    image_url:
-      "https://images.unsplash.com/photo-1552664730-d307ca884978?auto=format&fit=crop&w=900&q=80",
-    published: true,
-    created_at: "2026-04-05T10:00:00.000Z",
-    launch_week: Math.max(1, getLaunchWeekFromDate(new Date()) - 1),
-    vote_count: 8
-  }
-];
-
-const demoProfiles = {
-  "demo-author-1": {
-    owner_id: "demo-author-1",
-    owner_email: "alex@aitools.dev",
-    display_name: "Alex Mercer",
-    headline: "Building AI systems for outbound teams.",
-    bio: "I work on sales automation and operator tooling for lean growth teams.",
-    avatar_url: ""
-  },
-  "demo-author-2": {
-    owner_id: "demo-author-2",
-    owner_email: "maya@aitools.dev",
-    display_name: "Maya Chen",
-    headline: "Helping teams turn briefs into content engines.",
-    bio: "I design AI content workflows for founders, marketers, and small creative teams.",
-    avatar_url: ""
-  },
-  "demo-author-3": {
-    owner_id: "demo-author-3",
-    owner_email: "ethan@aitools.dev",
-    display_name: "Ethan Hunt",
-    headline: "Support tooling, calm queues, and clear handoffs.",
-    bio: "Focused on AI copilots that make customer support faster and more humane.",
-    avatar_url: ""
-  }
-};
 
 function App() {
   const [projects, setProjects] = useState([]);
@@ -530,12 +83,6 @@ function App() {
   const [restoringProjectId, setRestoringProjectId] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [activeView, setActiveView] = useState("home");
-  const [activeSlug, setActiveSlug] = useState("");
-  const [activePreviewId, setActivePreviewId] = useState("");
-  const [activeAuthorId, setActiveAuthorId] = useState("");
-  const [activeCategorySlug, setActiveCategorySlug] = useState("");
-  const [homeCategoryFilterSlug, setHomeCategoryFilterSlug] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [dashboardSearchQuery, setDashboardSearchQuery] = useState("");
   const [authorProfiles, setAuthorProfiles] = useState({});
@@ -554,6 +101,25 @@ function App() {
   const userMenuRef = useRef(null);
   const hasLoadedCachedProjectsRef = useRef(false);
   const previousMyProjectsRef = useRef([]);
+  const {
+    activeView,
+    activeSlug,
+    activePreviewId,
+    activeAuthorId,
+    activeCategorySlug,
+    homeCategoryFilterSlug,
+    setHomeCategoryFilterSlug,
+    openDashboard: navigateToDashboard,
+    openProjectsPage: navigateToProjectsPage,
+    openHome: navigateToHome,
+    openTermsPage: navigateToTermsPage,
+    openPrivacyPage: navigateToPrivacyPage,
+    openProject: navigateToProject,
+    openProjectPreview: navigateToProjectPreview,
+    openCategoryPage: navigateToCategoryPage,
+    openAuthorDashboard,
+    toggleHomeCategoryFilter: toggleCategoryFilterRoute
+  } = useAppRouter(session?.user?.id || "");
 
   function pushToast(toast) {
     const toastId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -1077,101 +643,6 @@ function App() {
   }, [activePreviewId, activeSlug, myProjects, projects]);
 
   useEffect(() => {
-    function syncViewFromLocation() {
-      const path = window.location.pathname.replace(/\/+$/, "") || "/";
-
-      if (path === "/dashboard") {
-        setActiveView("dashboard");
-        setActiveSlug("");
-        setActivePreviewId("");
-        setActiveAuthorId(session?.user?.id || "");
-        setActiveCategorySlug("");
-        setHomeCategoryFilterSlug("");
-        return;
-      }
-
-      if (path.startsWith("/dashboard/")) {
-        const authorId = decodeURIComponent(path.replace("/dashboard/", ""));
-        setActiveView("dashboard");
-        setActiveAuthorId(session ? authorId : "");
-        setActiveSlug("");
-        setActivePreviewId("");
-        setActiveCategorySlug("");
-        setHomeCategoryFilterSlug("");
-        return;
-      }
-
-      if (path === "/projects") {
-        setActiveView("projects");
-        setActiveSlug("");
-        setActiveCategorySlug("");
-        setHomeCategoryFilterSlug("");
-        return;
-      }
-
-      if (path === "/terms") {
-        setActiveView("terms");
-        setActiveSlug("");
-        setActivePreviewId("");
-        setActiveAuthorId("");
-        setActiveCategorySlug("");
-        setHomeCategoryFilterSlug("");
-        return;
-      }
-
-      if (path === "/privacy") {
-        setActiveView("privacy");
-        setActiveSlug("");
-        setActivePreviewId("");
-        setActiveAuthorId("");
-        setActiveCategorySlug("");
-        setHomeCategoryFilterSlug("");
-        return;
-      }
-
-      if (path.startsWith("/project/")) {
-        setActiveView("project");
-        setActiveSlug(decodeURIComponent(path.replace("/project/", "")));
-        setActivePreviewId("");
-        setActiveCategorySlug("");
-        setHomeCategoryFilterSlug("");
-        return;
-      }
-
-      if (path.startsWith("/preview/")) {
-        setActiveView("project");
-        setActivePreviewId(normalizeNumericId(decodeURIComponent(path.replace("/preview/", ""))));
-        setActiveSlug("");
-        setActiveCategorySlug("");
-        setHomeCategoryFilterSlug("");
-        return;
-      }
-
-      if (path.startsWith("/category/")) {
-        setActiveView("category");
-        setActiveCategorySlug(decodeURIComponent(path.replace("/category/", "")));
-        setActiveSlug("");
-        setActiveAuthorId("");
-        setHomeCategoryFilterSlug("");
-        return;
-      }
-
-      setActiveView("home");
-      setActiveSlug("");
-      setActivePreviewId("");
-      setActiveAuthorId("");
-      setActiveCategorySlug("");
-    }
-
-    syncViewFromLocation();
-    window.addEventListener("popstate", syncViewFromLocation);
-
-    return () => {
-      window.removeEventListener("popstate", syncViewFromLocation);
-    };
-  }, [session]);
-
-  useEffect(() => {
     setVisibleProjectsCount(initialVisibleProjectsCount);
   }, [homeCategoryFilterSlug, searchQuery]);
 
@@ -1276,7 +747,7 @@ function App() {
     }
 
     setIsMenuOpen(false);
-    setActiveView("home");
+    openHome();
   }
 
   function handleInputChange(event) {
@@ -1824,89 +1295,47 @@ function App() {
 
   function openDashboard() {
     setIsMenuOpen(false);
-    window.history.pushState({}, "", "/dashboard");
-    setActiveView("dashboard");
-    setActiveSlug("");
-    setActivePreviewId("");
-    setActiveAuthorId(session?.user?.id || "");
-    setActiveCategorySlug("");
-    setHomeCategoryFilterSlug("");
+    navigateToDashboard();
   }
 
   function openProjectsPage() {
-    window.history.pushState({}, "", "/projects");
-    setActiveView("projects");
-    setActiveSlug("");
-    setActiveAuthorId("");
-    setActiveCategorySlug("");
-    setHomeCategoryFilterSlug("");
     setIsMenuOpen(false);
+    navigateToProjectsPage();
   }
 
   function openHome() {
-    window.history.pushState({}, "", "/");
-    setActiveView("home");
-    setActiveSlug("");
-    setActiveAuthorId("");
-    setActiveCategorySlug("");
-    setHomeCategoryFilterSlug("");
     setIsMenuOpen(false);
+    navigateToHome();
   }
 
   function openTermsPage() {
-    window.history.pushState({}, "", "/terms");
-    setActiveView("terms");
-    setActiveSlug("");
-    setActivePreviewId("");
-    setActiveAuthorId("");
-    setActiveCategorySlug("");
-    setHomeCategoryFilterSlug("");
     setIsMenuOpen(false);
+    navigateToTermsPage();
   }
 
   function openPrivacyPage() {
-    window.history.pushState({}, "", "/privacy");
-    setActiveView("privacy");
-    setActiveSlug("");
-    setActivePreviewId("");
-    setActiveAuthorId("");
-    setActiveCategorySlug("");
-    setHomeCategoryFilterSlug("");
     setIsMenuOpen(false);
+    navigateToPrivacyPage();
   }
 
   function openProject(project) {
-    const projectSlug = slugify(project.title);
-    window.history.pushState({}, "", `/project/${projectSlug}`);
-    setActiveView("project");
-    setActiveSlug(projectSlug);
-    setActivePreviewId("");
-    setActiveAuthorId("");
-    setActiveCategorySlug("");
-    setHomeCategoryFilterSlug("");
     setIsMenuOpen(false);
+    navigateToProject(project);
   }
 
   function openProjectPreview(project) {
-    window.history.pushState({}, "", `/preview/${project.id}`);
-    setActiveView("project");
-    setActivePreviewId(project.id);
-    setActiveSlug("");
-    setActiveAuthorId("");
-    setActiveCategorySlug("");
-    setHomeCategoryFilterSlug("");
     setIsMenuOpen(false);
+    navigateToProjectPreview(project);
   }
 
   function openCategoryPage(categoryName) {
-    const categorySlug = getCategorySlug(categoryName);
-    window.history.pushState({}, "", `/category/${categorySlug}`);
-    setActiveView("category");
-    setActiveCategorySlug(categorySlug);
-    setActiveSlug("");
-    setActiveAuthorId("");
-    setHomeCategoryFilterSlug("");
     setIsMenuOpen(false);
+    navigateToCategoryPage(categoryName);
+  }
+
+  function toggleHomeCategoryFilter(categoryName) {
+    setIsMenuOpen(false);
+    toggleCategoryFilterRoute(categoryName);
   }
 
   function openAuthorProfile(ownerId) {
@@ -1916,26 +1345,9 @@ function App() {
 
     const fallbackProject =
       [...projects, ...myProjects].find((project) => project.owner_id === ownerId) || null;
-    window.history.pushState({}, "", `/dashboard/${encodeURIComponent(ownerId)}`);
-    setActiveView("dashboard");
-    setActiveAuthorId(ownerId);
-    setActiveSlug("");
-    setActivePreviewId("");
-    setActiveCategorySlug("");
-    setHomeCategoryFilterSlug("");
+    openAuthorDashboard(ownerId);
     setIsMenuOpen(false);
     loadAuthorProfile(ownerId, fallbackProject);
-  }
-
-  function toggleHomeCategoryFilter(categoryName) {
-    const categorySlug = getCategorySlug(categoryName);
-    const nextView = activeView === "projects" ? "projects" : "home";
-    window.history.pushState({}, "", nextView === "projects" ? "/projects" : "/");
-    setActiveView(nextView);
-    setActiveSlug("");
-    setActiveCategorySlug("");
-    setHomeCategoryFilterSlug((current) => (current === categorySlug ? "" : categorySlug));
-    setIsMenuOpen(false);
   }
 
   function handleSearchQueryChange(event) {
@@ -2128,15 +1540,11 @@ function App() {
         .map((project) => [project.id, project])
     ).values()
   );
-  const launchWeekCounts = uniqueProjectsForLaunchCapacity
-    .filter((project) => !project?.deleted)
-    .filter((project) => project?.id !== editingProject?.id)
-    .map((project) => Number(project?.launch_week))
-    .filter((launchWeek) => Number.isInteger(launchWeek) && launchWeek > 0)
-    .reduce((result, launchWeek) => {
-      result[launchWeek] = (result[launchWeek] || 0) + 1;
-      return result;
-    }, {});
+  const launchWeekCounts = getLaunchWeekCounts(
+    uniqueProjectsForLaunchCapacity
+      .filter((project) => !project?.deleted)
+      .filter((project) => project?.id !== editingProject?.id)
+  );
   const getLaunchSlotMeta = (week) => {
     const bookedCount = launchWeekCounts[week] || 0;
 
@@ -2167,12 +1575,8 @@ function App() {
           ...slot,
           ...getLaunchSlotMeta(slot.week)
         }));
-  const projectsWithVotes = projects.map((project) => ({
-    ...project,
-    vote_count: typeof voteCounts[project.id] === "number" ? voteCounts[project.id] : Number(project.vote_count) || 0,
-    user_voted: votedProjectIds.includes(project.id)
-  }));
-  const publicProjects = projectsWithVotes.filter((project) => project.published);
+  const projectsWithVotes = getProjectsWithVotes(projects, voteCounts, votedProjectIds);
+  const publicProjects = getPublicProjects(projectsWithVotes);
   const previewProject = myProjects.find((project) => project.id === activePreviewId);
   const activeProject = activePreviewId
     ? previewProject || null
@@ -2206,54 +1610,31 @@ function App() {
   const isPreviewProject = Boolean(activePreviewId);
   const currentLaunchWeek = getLaunchWeekFromDate(new Date());
   const currentLaunchRange = getLaunchSlotRange(currentLaunchWeek, launchYear);
-  const thisWeekProjects = publicProjects
-    .filter((project) => {
-      if (project.launch_date) {
-        return (
-          project.launch_date >= currentLaunchRange.startDateValue &&
-          project.launch_date <= currentLaunchRange.endDateValue
-        );
-      }
-
-      return Number(project.launch_week) === currentLaunchWeek;
-    })
-    .sort((left, right) => {
-      if ((right.vote_count || 0) !== (left.vote_count || 0)) {
-        return (right.vote_count || 0) - (left.vote_count || 0);
-      }
-
-      return new Date(right.created_at || 0).getTime() - new Date(left.created_at || 0).getTime();
-    });
+  const thisWeekProjects = getCurrentLaunchProjects(publicProjects, currentLaunchWeek, currentLaunchRange);
   const launchLeader = thisWeekProjects[0] || null;
   const allCategoryNames = Array.from(new Set(publicProjects.flatMap((project) => getProjectCategoryNames(project))));
   const activeCategoryName =
     allCategoryNames.find((categoryName) => getCategorySlug(categoryName) === activeCategorySlug) || "";
-  const categoryProjects = publicProjects.filter((project) =>
-    getProjectCategoryNames(project).some((categoryName) => getCategorySlug(categoryName) === activeCategorySlug)
+  const categoryProjects = getCategoryProjects(
+    publicProjects,
+    activeCategorySlug,
+    getProjectCategoryNames,
+    getCategorySlug
   );
-  const categoryFilteredHomeProjects = homeCategoryFilterSlug
-    ? publicProjects.filter((project) =>
-        getProjectCategoryNames(project).some(
-          (categoryName) => getCategorySlug(categoryName) === homeCategoryFilterSlug
-        )
-      )
-    : publicProjects;
-  const normalizedSearchQuery = searchQuery.trim().toLowerCase();
-  const filteredHomeProjects = normalizedSearchQuery
-    ? categoryFilteredHomeProjects.filter((project) => {
-        const categoryText = getProjectCategoryNames(project).join(" ");
-        return [project.title, project.slogan, categoryText]
-          .filter(Boolean)
-          .some((value) => String(value).toLowerCase().includes(normalizedSearchQuery));
-      })
-    : categoryFilteredHomeProjects;
+  const categoryFilteredHomeProjects = getCategoryFilteredProjects(
+    publicProjects,
+    homeCategoryFilterSlug,
+    getProjectCategoryNames,
+    getCategorySlug
+  );
+  const filteredHomeProjects = getFilteredProjectsBySearch(
+    categoryFilteredHomeProjects,
+    searchQuery,
+    getProjectCategoryNames
+  );
   const visibleHomeProjects = filteredHomeProjects.slice(0, visibleProjectsCount);
   const hasMoreHomeProjects = filteredHomeProjects.length > visibleHomeProjects.length;
-  const categoryCounts = allCategoryNames.map((categoryName) => ({
-    name: categoryName,
-    slug: getCategorySlug(categoryName),
-    count: publicProjects.filter((project) => getProjectCategoryNames(project).includes(categoryName)).length
-  }));
+  const categoryCounts = getCategoryCounts(publicProjects, allCategoryNames, getProjectCategoryNames);
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(125,211,252,0.22),_transparent_35%),radial-gradient(circle_at_top_right,_rgba(226,232,240,0.65),_transparent_30%),linear-gradient(180deg,_#f8fbff_0%,_#f8fafc_40%,_#f1f5f9_100%)] text-slate-900 dark:bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.12),_transparent_30%),radial-gradient(circle_at_top_right,_rgba(30,41,59,0.65),_transparent_28%),linear-gradient(180deg,_#020617_0%,_#0f172a_38%,_#111827_100%)] dark:text-slate-100">
       <div className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 pb-10 pt-4 sm:px-6 lg:px-8">
